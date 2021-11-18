@@ -8,4 +8,4 @@ cargo test
 
 docker build -t compilerbook .
 
-docker run compilerbook cargo run --release 65
+docker run compilerbook cargo run --release '5+21-4'
