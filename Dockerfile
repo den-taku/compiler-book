@@ -30,4 +30,4 @@ RUN rm -f target/release/deps/compiler_book*
 
 RUN cargo test
 RUN cargo build --release
-RUN cargo run --release
+# RUN cargo run --release
