@@ -3,6 +3,7 @@ FROM ubuntu:latest
 # Install some
 RUN apt-get update && apt-get install -y curl
 RUN apt-get install build-essential -y
+RUN apt-get install -y clang
 
 # working directory is compier-book
 RUN mkdir -p /user/compiler-book
@@ -28,6 +29,6 @@ COPY ./src ./src
 
 RUN rm -f target/release/deps/compiler_book*
 
-RUN cargo test
+# RUN cargo test
 RUN cargo build --release
 # RUN cargo run --release
