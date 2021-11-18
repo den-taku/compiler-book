@@ -19,6 +19,10 @@ RUN mkdir src
 RUN echo "fn main(){}" > src/main.rs
 RUN cargo build --release
 
+# copy testcase
+RUN mkdir testcase
+COPY ./testcase ./testcase
+
 # copy code
 COPY ./src ./src
 
