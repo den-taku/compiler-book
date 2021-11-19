@@ -15,6 +15,6 @@ fn main() {
 
     print!("{}", add_sub(&args[1]));
 
-    let token_sequence = TokenSequence::tokenize(args.into_iter().nth(1).unwrap());
+    let token_sequence = TokenStream::tokenize01(args.into_iter().nth(1).unwrap());
     println!("{:?}", token_sequence);
 }

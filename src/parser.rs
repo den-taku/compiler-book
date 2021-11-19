@@ -1,5 +1,41 @@
 use std::process;
 
+// pub fn add_sub_space(stream: crate::lexer::TokenStream) -> String {
+//     // verify token sequence
+//     let mut need_number = true;
+//     for &token in &
+
+//     let mut ret = String::new();
+//     ret.push_str(".intel_syntax noprefix\n");
+//     if cfg!(target_os = "linux") {
+//         ret.push_str(".global main\n\n");
+//         ret.push_str("main:\n");
+//     } else {
+//         ret.push_str(".global _main\n\n");
+//         ret.push_str("_main:\n");
+//     }
+//     ret.push_str("  mov rax, ");
+//     let mut number = 0;
+//     for c in program.chars() {
+//         if c == '+' {
+//             ret.push_str(&format!("{}\n  add rax, ", number));
+//             number = 0;
+//         } else if c == '-' {
+//             ret.push_str(&format!("{}\n  sub rax, ", number));
+//             number = 0;
+//         } else if c.is_numeric() {
+//             number *= 10;
+//             number += (c as u8 - b'0') as usize;
+//         } else {
+//             println!("unexpected input: {}.", c);
+//             process::exit(1);
+//         }
+//     }
+//     ret.push_str(&format!("{}\n", number));
+//     ret.push_str("  ret\n\n");
+//     ret
+// }
+
 pub fn add_sub(program: &str) -> String {
     let mut ret = String::new();
     ret.push_str(".intel_syntax noprefix\n");

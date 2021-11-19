@@ -2,7 +2,7 @@ use Operator::*;
 use Token::*;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TokenSequence {
+pub struct TokenStream {
     sequence: std::collections::LinkedList<Token>,
 }
 
@@ -19,12 +19,12 @@ pub enum Operator {
     Sub,
 }
 
-impl TokenSequence {
-    pub fn tokenize(mut program: String) -> Self {
+impl TokenStream {
+    pub fn tokenize01(mut program: String) -> Self {
         let mut sequence = std::collections::LinkedList::<Token>::new();
         while !program.is_empty() {
             // lex as number
-            let (string, ret) = TokenSequence::consume_number(program);
+            let (string, ret) = TokenStream::consume_number(program);
             program = string;
             if let Some(token) = ret {
                 sequence.push_back(token);
@@ -32,7 +32,7 @@ impl TokenSequence {
             }
 
             // lex as operator
-            let (string, ret) = TokenSequence::consume_operator(program);
+            let (string, ret) = TokenStream::consume_operator(program);
             program = string;
             if let Some(token) = ret {
                 sequence.push_back(token);
@@ -40,7 +40,7 @@ impl TokenSequence {
             }
 
             // consume whitespaces
-            let (string, ret) = TokenSequence::consume_whitespace(program);
+            let (string, ret) = TokenStream::consume_whitespace(program);
             program = string;
             if ret.is_some() {
                 continue;
@@ -128,11 +128,11 @@ mod test_lexer {
         for (case, answer) in cases
             .into_iter()
             .map(|s| s.to_string())
-            .zip(answers.into_iter().map(|tokens| TokenSequence {
+            .zip(answers.into_iter().map(|tokens| TokenStream {
                 sequence: tokens.into_iter().collect(),
             }))
         {
-            assert_eq!(TokenSequence::tokenize(case), answer);
+            assert_eq!(TokenStream::tokenize01(case), answer);
         }
         assert_eq!(1 + 2, 3);
     }
@@ -141,13 +141,13 @@ mod test_lexer {
     #[should_panic(expected = "fail to lex. need some charactors without whitespace.")]
     fn for_tokenize_panic_empty() {
         let program = " \n   ".to_string();
-        let _ = TokenSequence::tokenize(program);
+        let _ = TokenStream::tokenize01(program);
     }
 
     #[test]
     #[should_panic(expected = "fail to lex. left: a + 89.")]
     fn for_tokenize_panic_invalid() {
         let program = "12 + 2 - a + 89".to_string();
-        let _ = TokenSequence::tokenize(program);
+        let _ = TokenStream::tokenize01(program);
     }
 }
