@@ -50,7 +50,7 @@ impl TokenSequence {
             panic!("fail to lex. left: {}.", program);
         }
         if sequence.is_empty() {
-            panic!("fail to lex. need some charactor without whitespace.")
+            panic!("fail to lex. need some charactors without whitespace.")
         }
         sequence.push_back(Eof);
         Self { sequence }
@@ -138,9 +138,9 @@ mod test_lexer {
     }
 
     #[test]
-    #[should_panic(expected = "fail to lex. need some charactor without whitespace.")]
+    #[should_panic(expected = "fail to lex. need some charactors without whitespace.")]
     fn for_tokenize_panic_empty() {
-        let program = "".to_string();
+        let program = " \n   ".to_string();
         let _ = TokenSequence::tokenize(program);
     }
 
