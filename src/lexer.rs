@@ -1,3 +1,4 @@
+use std::iter::IntoIterator;
 use Operator::*;
 use Token::*;
 
@@ -17,6 +18,15 @@ pub enum Token {
 pub enum Operator {
     Add,
     Sub,
+}
+
+impl<'a> IntoIterator for &'a TokenStream {
+    type Item = &'a Token;
+    type IntoIter = std::collections::linked_list::Iter<'a, Token>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.sequence.iter()
+    }
 }
 
 impl TokenStream {
