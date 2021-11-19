@@ -1,20 +1,6 @@
-#![allow(dead_code)]
-use std::env;
-// use std::io::Write;
 use std::process;
-// use std::process::Command;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        println!("invalid number of arguments");
-        process::exit(1);
-    }
-
-    print!("{}", add_sub(&args[1]));
-}
-
-fn add_sub(program: &str) -> String {
+pub fn add_sub(program: &str) -> String {
     let mut ret = String::new();
     ret.push_str(".intel_syntax noprefix\n");
     if cfg!(target_os = "linux") {
@@ -37,7 +23,7 @@ fn add_sub(program: &str) -> String {
             number *= 10;
             number += (c as u8 - b'0') as usize;
         } else {
-            println!("invalid input: {}", c);
+            println!("unexpected input: {}.", c);
             process::exit(1);
         }
     }
@@ -46,7 +32,8 @@ fn add_sub(program: &str) -> String {
     ret
 }
 
-fn return_number(number: i64) -> String {
+pub fn return_number(number: &str) -> String {
+    let number = number.parse::<i64>().expect("fail to convert to number");
     let mut ret = String::new();
     ret.push_str(".intel_syntax noprefix\n");
     if cfg!(target_os = "linux") {
@@ -62,7 +49,7 @@ fn return_number(number: i64) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_parser {
     use super::*;
     use process::Command;
     use std::fs::File;
@@ -95,7 +82,7 @@ mod tests {
 
     #[test]
     fn for_return_number() {
-        let cases = vec![0, 42, 255];
+        let cases = vec!["0", "42", "255"];
         let answers = vec![0, 42, 255];
         for (case, answer) in cases.into_iter().zip(answers.into_iter()) {
             let program = return_number(case);

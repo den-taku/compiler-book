@@ -17,7 +17,8 @@ COPY Cargo.toml Cargo.toml
 
 # for caching
 RUN mkdir src
-RUN echo "fn main(){}" > src/main.rs
+RUN mkdir src/bin
+RUN echo "fn main(){}" > src/bin/main.rs
 RUN cargo build --release
 
 # copy testcase
