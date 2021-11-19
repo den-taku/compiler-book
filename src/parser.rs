@@ -2,31 +2,36 @@ use crate::lexer::Operator::*;
 use crate::lexer::Token::*;
 use std::process;
 
-pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> String {
-    // verify token sequence
+fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, usize)> {
     let mut need_number = true;
-    for &token in stream {
+    for (index, &token) in stream.into_iter().enumerate() {
         match token {
             Reserved(_) => {
                 if need_number {
-                    panic!("fail to parse: need number here.")
+                    return Err(("fail to parse: need number here.".to_string(), index));
                 }
                 need_number = true;
             }
             Number(_) => {
                 if !need_number {
-                    panic!("fail to parse: need operator here.")
+                    return Err(("fail to parse: need operator here.".to_string(), index));
                 }
                 need_number = false;
             }
             _ => {
                 if need_number {
-                    panic!("fail to parse: need number here.")
+                    return Err(("fail to parse: need number here.".to_string(), index));
                 }
                 break;
             }
         }
     }
+    Ok(())
+}
+
+pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> Result<String, (String, usize)> {
+    // verify token sequence
+    verify_stream(stream)?;
 
     let mut ret = String::new();
     ret.push_str(".intel_syntax noprefix\n");
@@ -51,7 +56,7 @@ pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> String {
     }
 
     ret.push_str("  ret\n\n");
-    ret
+    Ok(ret)
 }
 
 pub fn add_sub(program: &str) -> String {
@@ -119,8 +124,8 @@ mod tests_parser {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let stream = TokenStream::tokenize01(case);
-            let program = add_sub_space(&stream);
+            let stream = TokenStream::tokenize01(case).unwrap();
+            let program = add_sub_space(&stream).unwrap();
             let mut file = File::create("test03.s").unwrap();
             write!(file, "{}", program).unwrap();
             file.flush().unwrap();
@@ -141,7 +146,6 @@ mod tests_parser {
     }
 
     #[test]
-    #[should_panic(expected = "fail to parse: need number here.")]
     fn for_add_sub_space_panic_number() {
         let cases = vec!["23 - 8+5-+ 3"];
         let answers = vec![17];
@@ -150,13 +154,15 @@ mod tests_parser {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let stream = TokenStream::tokenize01(case);
-            let _program = add_sub_space(&stream);
+            let stream = TokenStream::tokenize01(case).unwrap();
+            assert_eq!(
+                add_sub_space(&stream),
+                Err(("fail to parse: need number here.".to_string(), 6))
+            );
         }
     }
 
     #[test]
-    #[should_panic(expected = "fail to parse: need operator here.")]
     fn for_add_sub_space_panic_operator() {
         let cases = vec!["23 - 8+5 3"];
         let answers = vec![17];
@@ -165,8 +171,11 @@ mod tests_parser {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let stream = TokenStream::tokenize01(case);
-            let _program = add_sub_space(&stream);
+            let stream = TokenStream::tokenize01(case).unwrap();
+            assert_eq!(
+                add_sub_space(&stream),
+                Err(("fail to parse: need operator here.".to_string(), 5))
+            );
         }
     }
 

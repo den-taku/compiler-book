@@ -5,6 +5,7 @@ use Token::*;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TokenStream {
     sequence: std::collections::LinkedList<Token>,
+    position: std::collections::LinkedList<usize>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -30,43 +31,53 @@ impl<'a> IntoIterator for &'a TokenStream {
 }
 
 impl TokenStream {
-    pub fn tokenize01(mut program: String) -> Self {
+    pub fn tokenize01<'a>(mut program: String) -> Result<Self, (String, usize)> {
         let mut sequence = std::collections::LinkedList::<Token>::new();
+        let mut position = std::collections::LinkedList::<usize>::new();
+        let mut start_at = 0usize;
         while !program.is_empty() {
             // lex as number
-            let (string, ret) = TokenStream::consume_number(program);
+            let (string, ret, width) = TokenStream::consume_number(program);
             program = string;
             if let Some(token) = ret {
                 sequence.push_back(token);
+                position.push_back(start_at);
+                start_at += width;
                 continue;
             }
 
             // lex as operator
-            let (string, ret) = TokenStream::consume_operator(program);
+            let (string, ret, width) = TokenStream::consume_operator(program);
             program = string;
             if let Some(token) = ret {
                 sequence.push_back(token);
+                position.push_back(start_at);
+                start_at += width;
                 continue;
             }
 
             // consume whitespaces
-            let (string, ret) = TokenStream::consume_whitespace(program);
+            let (string, ret, width) = TokenStream::consume_whitespace(program);
             program = string;
             if ret.is_some() {
+                start_at += width;
                 continue;
             }
 
             // fail to lex
-            panic!("fail to lex. left: {}.", program);
+            return Err((format!("fail to lex. left: {}.", program), start_at));
         }
         if sequence.is_empty() {
-            panic!("fail to lex. need some charactors without whitespace.")
+            return Err((
+                "fail to lex. need some charactors without whitespace.".to_string(),
+                start_at,
+            ));
         }
         sequence.push_back(Eof);
-        Self { sequence }
+        Ok(Self { sequence, position })
     }
 
-    fn consume_number(buffer: String) -> (String, Option<Token>) {
+    fn consume_number(buffer: String) -> (String, Option<Token>, usize) {
         let digit = buffer.chars().take_while(|c| c.is_ascii_digit()).count();
         let mut chars = buffer.chars();
         let number = chars.by_ref().take(digit).collect::<String>();
@@ -80,23 +91,25 @@ impl TokenStream {
                     number.parse::<i64>().expect("fail to parse number."),
                 ))
             },
+            digit,
         )
     }
 
-    fn consume_operator(buffer: String) -> (String, Option<Token>) {
+    fn consume_operator(buffer: String) -> (String, Option<Token>, usize) {
         let mut chars = buffer.chars();
         match chars.by_ref().peekable().peek() {
-            Some(op) if op == &'+' => ({ chars.collect::<String>() }, Some(Reserved(Add))),
-            Some(op) if op == &'-' => ({ chars.collect::<String>() }, Some(Reserved(Sub))),
-            _ => (buffer, None),
+            Some(op) if op == &'+' => ({ chars.collect::<String>() }, Some(Reserved(Add)), 1),
+            Some(op) if op == &'-' => ({ chars.collect::<String>() }, Some(Reserved(Sub)), 1),
+            _ => (buffer, None, 0),
         }
     }
 
-    fn consume_whitespace(buffer: String) -> (String, Option<Token>) {
+    fn consume_whitespace(buffer: String) -> (String, Option<Token>, usize) {
         let spaces = buffer.chars().take_while(|c| c.is_whitespace()).count();
         (
             buffer.chars().skip(spaces).collect::<String>(),
             if spaces == 0 { None } else { Some(Eof) },
+            spaces,
         )
     }
 }
@@ -109,55 +122,69 @@ mod test_lexer {
     fn for_tokenize() {
         let cases = vec!["5+20-4", "23 - 8+ 5-   3 + 56 + 9 - 8", "0"];
         let answers = vec![
-            vec![
-                Number(5),
-                Reserved(Add),
-                Number(20),
-                Reserved(Sub),
-                Number(4),
-                Eof,
-            ],
-            vec![
-                Number(23),
-                Reserved(Sub),
-                Number(8),
-                Reserved(Add),
-                Number(5),
-                Reserved(Sub),
-                Number(3),
-                Reserved(Add),
-                Number(56),
-                Reserved(Add),
-                Number(9),
-                Reserved(Sub),
-                Number(8),
-                Eof,
-            ],
-            vec![Number(0), Eof],
+            (
+                vec![
+                    Number(5),
+                    Reserved(Add),
+                    Number(20),
+                    Reserved(Sub),
+                    Number(4),
+                    Eof,
+                ],
+                vec![0, 1, 2, 4, 5],
+            ),
+            (
+                vec![
+                    Number(23),
+                    Reserved(Sub),
+                    Number(8),
+                    Reserved(Add),
+                    Number(5),
+                    Reserved(Sub),
+                    Number(3),
+                    Reserved(Add),
+                    Number(56),
+                    Reserved(Add),
+                    Number(9),
+                    Reserved(Sub),
+                    Number(8),
+                    Eof,
+                ],
+                vec![0, 3, 5, 6, 8, 9, 13, 15, 17, 20, 22, 24, 26],
+            ),
+            (vec![Number(0), Eof], vec![0]),
         ];
         for (case, answer) in cases
             .into_iter()
             .map(|s| s.to_string())
             .zip(answers.into_iter().map(|tokens| TokenStream {
-                sequence: tokens.into_iter().collect(),
+                sequence: tokens.0.into_iter().collect(),
+                position: tokens.1.into_iter().collect(),
             }))
         {
-            assert_eq!(TokenStream::tokenize01(case), answer);
+            assert_eq!(TokenStream::tokenize01(case), Ok(answer));
         }
         assert_eq!(1 + 2, 3);
     }
 
     #[test]
-    #[should_panic(expected = "fail to lex. need some charactors without whitespace.")]
     fn for_tokenize_panic_empty() {
         let program = " \n   ".to_string();
-        let _ = TokenStream::tokenize01(program);
+        assert_eq!(
+            TokenStream::tokenize01(program),
+            Err((
+                "fail to lex. need some charactors without whitespace.".to_string(),
+                5
+            ))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "fail to lex. left: a + 89.")]
     fn for_tokenize_panic_invalid() {
         let program = "12 + 2 - a + 89".to_string();
-        let _ = TokenStream::tokenize01(program);
+        assert_eq!(
+            TokenStream::tokenize01(program),
+            Err(("fail to lex. left: a + 89.".to_string(), 9))
+        );
     }
 }

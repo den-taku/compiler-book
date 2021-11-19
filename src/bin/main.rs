@@ -13,6 +13,9 @@ fn main() {
         process::exit(1);
     }
 
-    let token_sequence = TokenStream::tokenize01(args.into_iter().nth(1).unwrap());
-    println!("{}", add_sub_space(&token_sequence));
+    let token_sequence = TokenStream::tokenize01(args.into_iter().nth(1).unwrap()).unwrap();
+    match add_sub_space(&token_sequence) {
+        Ok(program) => println!("{}", program),
+        Err((statement, _index)) => panic!("{}", statement),
+    }
 }
