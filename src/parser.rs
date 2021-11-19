@@ -1,26 +1,36 @@
+use crate::error::*;
 use crate::lexer::Operator::*;
 use crate::lexer::Token::*;
 use std::process;
 
-fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, usize)> {
+fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, Position)> {
     let mut need_number = true;
     for (index, &token) in stream.into_iter().enumerate() {
         match token {
             Reserved(_) => {
                 if need_number {
-                    return Err(("fail to parse: need number here.".to_string(), index));
+                    return Err((
+                        "fail to parse: need number here.".to_string(),
+                        Position(index),
+                    ));
                 }
                 need_number = true;
             }
             Number(_) => {
                 if !need_number {
-                    return Err(("fail to parse: need operator here.".to_string(), index));
+                    return Err((
+                        "fail to parse: need operator here.".to_string(),
+                        Position(index),
+                    ));
                 }
                 need_number = false;
             }
             _ => {
                 if need_number {
-                    return Err(("fail to parse: need number here.".to_string(), index));
+                    return Err((
+                        "fail to parse: need number here.".to_string(),
+                        Position(index),
+                    ));
                 }
                 break;
             }
@@ -29,7 +39,7 @@ fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, usiz
     Ok(())
 }
 
-pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> Result<String, (String, usize)> {
+pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> Result<String, (String, Position)> {
     // verify token sequence
     verify_stream(stream)?;
 
@@ -157,7 +167,7 @@ mod tests_parser {
             let stream = TokenStream::tokenize01(case).unwrap();
             assert_eq!(
                 add_sub_space(&stream),
-                Err(("fail to parse: need number here.".to_string(), 6))
+                Err(("fail to parse: need number here.".to_string(), Position(6)))
             );
         }
     }
@@ -174,7 +184,10 @@ mod tests_parser {
             let stream = TokenStream::tokenize01(case).unwrap();
             assert_eq!(
                 add_sub_space(&stream),
-                Err(("fail to parse: need operator here.".to_string(), 5))
+                Err((
+                    "fail to parse: need operator here.".to_string(),
+                    Position(5)
+                ))
             );
         }
     }

@@ -1,11 +1,12 @@
+use crate::error::*;
 use std::iter::IntoIterator;
 use Operator::*;
 use Token::*;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TokenStream {
-    sequence: std::collections::LinkedList<Token>,
-    position: std::collections::LinkedList<usize>,
+    pub sequence: std::collections::LinkedList<Token>,
+    pub position: std::collections::LinkedList<usize>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -31,7 +32,7 @@ impl<'a> IntoIterator for &'a TokenStream {
 }
 
 impl TokenStream {
-    pub fn tokenize01<'a>(mut program: String) -> Result<Self, (String, usize)> {
+    pub fn tokenize01(mut program: String) -> Result<Self, (String, Byte)> {
         let mut sequence = std::collections::LinkedList::<Token>::new();
         let mut position = std::collections::LinkedList::<usize>::new();
         let mut start_at = 0usize;
@@ -65,12 +66,12 @@ impl TokenStream {
             }
 
             // fail to lex
-            return Err((format!("fail to lex. left: {}.", program), start_at));
+            return Err((format!("fail to lex. left: {}.", program), Byte(start_at)));
         }
         if sequence.is_empty() {
             return Err((
                 "fail to lex. need some charactors without whitespace.".to_string(),
-                start_at,
+                Byte(start_at),
             ));
         }
         sequence.push_back(Eof);
@@ -174,7 +175,7 @@ mod test_lexer {
             TokenStream::tokenize01(program),
             Err((
                 "fail to lex. need some charactors without whitespace.".to_string(),
-                5
+                Byte(5)
             ))
         );
     }
@@ -184,7 +185,7 @@ mod test_lexer {
         let program = "12 + 2 - a + 89".to_string();
         assert_eq!(
             TokenStream::tokenize01(program),
-            Err(("fail to lex. left: a + 89.".to_string(), 9))
+            Err(("fail to lex. left: a + 89.".to_string(), Byte(9)))
         );
     }
 }
