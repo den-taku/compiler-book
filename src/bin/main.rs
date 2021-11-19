@@ -31,3 +31,8 @@ fn main() {
         }
     }
 }
+
+#[test]
+fn fail() {
+    assert_eq!(2 + 4, 5)
+}
