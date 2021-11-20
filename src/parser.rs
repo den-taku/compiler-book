@@ -13,6 +13,11 @@ pub enum Node {
     Num(i64),
 }
 
+pub fn parser01(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
+    verify_stream(stream)?;
+    Ok(expr01(stream))
+}
+
 pub fn expr01(stream: &mut TokenStream) -> Node {
     let mut node = mul01(stream);
     while let Some(token) = stream.sequence.front() {

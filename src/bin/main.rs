@@ -4,6 +4,7 @@ use std::env;
 use std::process;
 // use std::process::Command;
 use compiler_book::error::*;
+use compiler_book::generator::*;
 use compiler_book::lexer::*;
 use compiler_book::parser::*;
 
@@ -23,13 +24,14 @@ fn main() {
         }
     }
 
-    println!("\n{:?}\n", expr01(&mut token_stream.clone().unwrap()));
+    let ast = parser01(&mut token_stream.clone().unwrap());
 
-    match add_sub_space(token_stream.as_ref().unwrap()) {
-        Ok(program) => println!("{}", program),
-        Err((message, position)) => {
-            error_position(position, &token_stream.unwrap(), args[1].clone(), message);
-            panic!()
-        }
+    if let Err((message, position)) = ast {
+        error_position(position, &token_stream.unwrap(), args[1].clone(), message);
+        panic!()
     }
+
+    let program = generate_program01(&ast.unwrap());
+
+    println!("{}", program);
 }
