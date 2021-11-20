@@ -69,8 +69,9 @@ mod tests_generator {
             "1 + 2 * 3",
             "0",
             "(4 + 3) / 7 + 1 * (4 - 2)",
+            "((4    +3) /  7 +4) *(4 -2 +   3 )",
         ];
-        let answers = vec![21, 17, 7, 0, 3];
+        let answers = vec![21, 17, 7, 0, 3, 25];
         for (case, answer) in cases
             .into_iter()
             .map(|s| s.to_string())
