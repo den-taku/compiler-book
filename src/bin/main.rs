@@ -4,6 +4,7 @@ use std::env;
 use std::process;
 // use std::process::Command;
 use compiler_book::error::*;
+// use compiler_book::generator::*;
 use compiler_book::lexer::*;
 use compiler_book::parser::*;
 

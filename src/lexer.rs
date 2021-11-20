@@ -141,7 +141,7 @@ impl TokenStream {
 }
 
 #[cfg(test)]
-mod test_lexer {
+mod tests_lexer {
     use super::*;
 
     #[test]
