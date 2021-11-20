@@ -1,21 +1,35 @@
 use crate::parser::{Node, Node::*};
 
-pub fn generate_program(node: &Node) -> String {
+pub fn generate_program01(node: &Node) -> String {
     let mut buffer = String::new();
-    generate_program_inner(node, &mut buffer);
+
+    buffer.push_str(".intel_syntax noprefix\n");
+    if cfg!(target_os = "linux") {
+        buffer.push_str(".global main\n\n");
+        buffer.push_str("main:\n");
+    } else {
+        buffer.push_str(".global _main\n\n");
+        buffer.push_str("_main:\n");
+    }
+
+    generate_arithmetics(node, &mut buffer);
+
+    buffer.push_str("   pop rax\n");
+    buffer.push_str("   ret\n");
+
     buffer
 }
 
-fn generate_program_inner(node: &Node, buffer: &mut String) {
+pub fn generate_arithmetics(node: &Node, buffer: &mut String) {
     match node {
         Num(number) => {
             buffer.push_str(&format!("   push {}\n", number));
         }
         Add(left, right) | Sub(left, right) | Mul(left, right) | Div(left, right) => {
             // first push left value
-            generate_program_inner(left, buffer);
+            generate_arithmetics(left, buffer);
             // next push right value on the left value
-            generate_program_inner(right, buffer);
+            generate_arithmetics(right, buffer);
 
             // right value -> rdi
             buffer.push_str("   pop rdi\n");
@@ -43,9 +57,49 @@ mod tests_generator {
     use super::*;
     use crate::lexer::TokenStream;
     use crate::parser::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::process::Command;
 
     #[test]
-    fn for_generator() {
+    fn for_generate_program01() {
+        let cases = vec![
+            "5+20-4",
+            "23 - 8+5- 3",
+            "1 + 2 * 3",
+            "0",
+            "(4 + 3) / 7 + 1 * (4 - 2)",
+        ];
+        let answers = vec![21, 17, 7, 0, 3];
+        for (case, answer) in cases
+            .into_iter()
+            .map(|s| s.to_string())
+            .zip(answers.into_iter())
+        {
+            let mut stream = TokenStream::tokenize01(case).unwrap();
+            let ast = expr01(&mut stream);
+            let program = generate_program01(&ast);
+            let mut file = File::create("test04.s").unwrap();
+            write!(file, "{}", program).unwrap();
+            file.flush().unwrap();
+            let out = Command::new("sh")
+                .arg("-c")
+                .arg(&format!("cc -o test04 test04.s; ./test04; echo $?",))
+                .output()
+                .unwrap()
+                .stdout;
+            let statement = std::str::from_utf8(&out).unwrap();
+            assert_eq!(statement.trim().parse::<i64>().unwrap(), answer);
+            Command::new("sh")
+                .arg("-c")
+                .arg("rm test04.s; rm test04")
+                .output()
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn for_generate_arithmetics() {
         let cases = vec![
             "5+20-4",
             "23 - 8+5- 3",
@@ -128,7 +182,9 @@ mod tests_generator {
         {
             let mut stream = TokenStream::tokenize01(case).unwrap();
             let ast = expr01(&mut stream);
-            assert_eq!(generate_program(&ast), answer);
+            let mut buffer = String::new();
+            generate_arithmetics(&ast, &mut buffer);
+            assert_eq!(buffer, answer);
         }
     }
 }

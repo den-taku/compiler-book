@@ -22,10 +22,10 @@ pub fn error_position(position: Position, stream: &TokenStream, program: String,
 }
 
 pub fn error_at(program: String, byte: Byte, message: String) {
-    println!("{}", program);
+    println!("\n{}", program);
     let Byte(index) = byte;
     println!(
-        "{}^ {}",
+        "{}^ {}\n",
         (0..index).map(|_| " ").collect::<String>(),
         message
     );
