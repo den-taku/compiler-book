@@ -1,9 +1,85 @@
 use crate::error::*;
-use crate::lexer::Operator::*;
 use crate::lexer::Token::*;
+use crate::lexer::*;
 use std::process;
+use Node::*;
 
-fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, Position)> {
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Node {
+    Add(Box<Node>, Box<Node>),
+    Sub(Box<Node>, Box<Node>),
+    Mul(Box<Node>, Box<Node>),
+    Div(Box<Node>, Box<Node>),
+    Num(i64),
+}
+
+pub fn expr01(stream: &mut TokenStream) -> Node {
+    let mut node = mul01(stream);
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(op) if op == &Operator::Add => {
+                stream.sequence.pop_front();
+                node = Add(Box::new(node), Box::new(mul01(stream)))
+            }
+            Reserved(op) if op == &Operator::Sub => {
+                stream.sequence.pop_front();
+                node = Sub(Box::new(node), Box::new(mul01(stream)))
+            }
+            Eof => {
+                break;
+            }
+            _ => return node,
+        }
+    }
+    node
+}
+
+pub fn mul01(stream: &mut TokenStream) -> Node {
+    let mut node = primary01(stream);
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(op) if op == &Operator::Mul => {
+                stream.sequence.pop_front();
+                node = Mul(Box::new(node), Box::new(primary01(stream)))
+            }
+            Reserved(op) if op == &Operator::Div => {
+                stream.sequence.pop_front();
+                node = Div(Box::new(node), Box::new(primary01(stream)))
+            }
+            Eof => {
+                break;
+            }
+            _ => return node,
+        }
+    }
+    node
+}
+
+pub fn primary01(stream: &mut TokenStream) -> Node {
+    if let Some(token) = stream.sequence.pop_front() {
+        match token {
+            LeftBra => {
+                let node = expr01(stream);
+                if let Some(token) = stream.sequence.pop_front() {
+                    if token == RightBra {
+                        node
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+            Number(number) => Num(number),
+            _ => unreachable!(),
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
+    let mut bracket = vec![];
     let mut need_number = true;
     for (index, &token) in stream.into_iter().enumerate() {
         match token {
@@ -25,6 +101,17 @@ fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, Posi
                 }
                 need_number = false;
             }
+            LeftBra => {
+                bracket.push(index);
+            }
+            RightBra => {
+                if bracket.pop().is_none() {
+                    return Err((
+                        "fail to parse: this bracker doesn't match.".to_string(),
+                        Position(index),
+                    ));
+                }
+            }
             _ => {
                 if need_number {
                     return Err((
@@ -36,10 +123,17 @@ fn verify_stream(stream: &crate::lexer::TokenStream) -> Result<(), (String, Posi
             }
         }
     }
-    Ok(())
+    if let Some(index) = bracket.pop() {
+        Err((
+            "fail to parse: this bracket doesn't match.".to_string(),
+            Position(index),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
-pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> Result<String, (String, Position)> {
+pub fn add_sub_space(stream: &TokenStream) -> Result<String, (String, Position)> {
     // verify token sequence
     verify_stream(stream)?;
 
@@ -56,12 +150,13 @@ pub fn add_sub_space(stream: &crate::lexer::TokenStream) -> Result<String, (Stri
 
     for &token in stream {
         match token {
-            Reserved(operator) if operator == Add => ret.push_str("  add rax, "),
+            Reserved(operator) if operator == Operator::Add => ret.push_str("  add rax, "),
             Reserved(_) => ret.push_str("  sub rax, "),
             Number(number) => ret.push_str(&format!("{}\n", number)),
             Eof => {
                 break;
             }
+            _ => unreachable!(),
         }
     }
 
@@ -120,10 +215,57 @@ pub fn return_number(number: &str) -> String {
 #[cfg(test)]
 mod tests_parser {
     use super::*;
-    use crate::lexer::*;
     use process::Command;
     use std::fs::File;
     use std::io::Write;
+
+    #[test]
+    fn for_expr01() {
+        let cases = vec![
+            "5+20-4",
+            "23 - 8+5- 3",
+            "1 + 2 * 3",
+            "0",
+            "(4 + 3) / 7 + 1 * (4 - 2)",
+        ];
+        let answers = vec![
+            Sub(
+                Box::new(Add(Box::new(Num(5)), Box::new(Num(20)))),
+                Box::new(Num(4)),
+            ),
+            Sub(
+                Box::new(Add(
+                    Box::new(Sub(Box::new(Num(23)), Box::new(Num(8)))),
+                    Box::new(Num(5)),
+                )),
+                Box::new(Num(3)),
+            ),
+            Add(
+                Box::new(Num(1)),
+                Box::new(Mul(Box::new(Num(2)), Box::new(Num(3)))),
+            ),
+            Num(0),
+            Add(
+                Box::new(Div(
+                    Box::new(Add(Box::new(Num(4)), Box::new(Num(3)))),
+                    Box::new(Num(7)),
+                )),
+                Box::new(Mul(
+                    Box::new(Num(1)),
+                    Box::new(Sub(Box::new(Num(4)), Box::new(Num(2)))),
+                )),
+            ),
+        ];
+        for (case, answer) in cases
+            .into_iter()
+            .map(|s| s.to_string())
+            .zip(answers.into_iter())
+        {
+            let mut stream = TokenStream::tokenize01(case).unwrap();
+            let ast = expr01(&mut stream);
+            assert_eq!(ast, answer);
+        }
+    }
 
     #[test]
     fn for_add_sub_space() {

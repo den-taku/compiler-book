@@ -13,6 +13,8 @@ pub struct TokenStream {
 pub enum Token {
     Reserved(Operator),
     Number(i64),
+    LeftBra,
+    RightBra,
     Eof,
 }
 
@@ -20,6 +22,8 @@ pub enum Token {
 pub enum Operator {
     Add,
     Sub,
+    Mul,
+    Div,
 }
 
 impl<'a> IntoIterator for &'a TokenStream {
@@ -37,6 +41,16 @@ impl TokenStream {
         let mut position = std::collections::LinkedList::<usize>::new();
         let mut start_at = 0usize;
         while !program.is_empty() {
+            // lex brackets
+            let (string, ret, width) = TokenStream::consume_bracket(program);
+            program = string;
+            if let Some(token) = ret {
+                sequence.push_back(token);
+                position.push_back(start_at);
+                start_at += width;
+                continue;
+            }
+
             // lex as number
             let (string, ret, width) = TokenStream::consume_number(program);
             program = string;
@@ -78,6 +92,15 @@ impl TokenStream {
         Ok(Self { sequence, position })
     }
 
+    fn consume_bracket(buffer: String) -> (String, Option<Token>, usize) {
+        let mut chars = buffer.chars();
+        match chars.by_ref().peekable().peek() {
+            Some(op) if op == &'(' => ({ chars.collect::<String>() }, Some(LeftBra), 1),
+            Some(op) if op == &')' => ({ chars.collect::<String>() }, Some(RightBra), 1),
+            _ => (buffer, None, 0),
+        }
+    }
+
     fn consume_number(buffer: String) -> (String, Option<Token>, usize) {
         let digit = buffer.chars().take_while(|c| c.is_ascii_digit()).count();
         let mut chars = buffer.chars();
@@ -101,6 +124,8 @@ impl TokenStream {
         match chars.by_ref().peekable().peek() {
             Some(op) if op == &'+' => ({ chars.collect::<String>() }, Some(Reserved(Add)), 1),
             Some(op) if op == &'-' => ({ chars.collect::<String>() }, Some(Reserved(Sub)), 1),
+            Some(op) if op == &'*' => ({ chars.collect::<String>() }, Some(Reserved(Mul)), 1),
+            Some(op) if op == &'/' => ({ chars.collect::<String>() }, Some(Reserved(Div)), 1),
             _ => (buffer, None, 0),
         }
     }

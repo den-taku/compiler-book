@@ -23,6 +23,8 @@ fn main() {
         }
     }
 
+    println!("\n{:?}\n", expr01(&mut token_stream.clone().unwrap()));
+
     match add_sub_space(token_stream.as_ref().unwrap()) {
         Ok(program) => println!("{}", program),
         Err((message, position)) => {
