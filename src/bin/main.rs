@@ -24,7 +24,7 @@ fn main() {
         }
     }
 
-    let ast = parser01(&mut token_stream.clone().unwrap());
+    let ast = parser(&mut token_stream.clone().unwrap());
 
     if let Err((message, position)) = ast {
         error_position(position, &token_stream.unwrap(), args[1].clone(), message);

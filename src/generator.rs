@@ -78,7 +78,7 @@ mod tests_generator {
             .zip(answers.into_iter())
         {
             let mut stream = TokenStream::tokenize01(case).unwrap();
-            let ast = expr01(&mut stream);
+            let ast = expr(&mut stream);
             let program = generate_program01(&ast);
             let mut file = File::create("test04.s").unwrap();
             write!(file, "{}", program).unwrap();
@@ -182,7 +182,7 @@ mod tests_generator {
             .zip(answers.into_iter().map(|s| s.to_string()))
         {
             let mut stream = TokenStream::tokenize01(case).unwrap();
-            let ast = expr01(&mut stream);
+            let ast = expr(&mut stream);
             let mut buffer = String::new();
             generate_arithmetics(&ast, &mut buffer);
             assert_eq!(buffer, answer);

@@ -13,22 +13,22 @@ pub enum Node {
     Num(i64),
 }
 
-pub fn parser01(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
+pub fn parser(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
     verify_stream(stream)?;
-    Ok(expr01(stream))
+    Ok(expr(stream))
 }
 
-pub fn expr01(stream: &mut TokenStream) -> Node {
-    let mut node = mul01(stream);
+pub fn expr(stream: &mut TokenStream) -> Node {
+    let mut node = mul(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
             Reserved(op) if op == &Operator::Add => {
                 stream.sequence.pop_front();
-                node = Add(Box::new(node), Box::new(mul01(stream)))
+                node = Add(Box::new(node), Box::new(mul(stream)))
             }
             Reserved(op) if op == &Operator::Sub => {
                 stream.sequence.pop_front();
-                node = Sub(Box::new(node), Box::new(mul01(stream)))
+                node = Sub(Box::new(node), Box::new(mul(stream)))
             }
             Eof => {
                 break;
@@ -39,17 +39,17 @@ pub fn expr01(stream: &mut TokenStream) -> Node {
     node
 }
 
-pub fn mul01(stream: &mut TokenStream) -> Node {
-    let mut node = primary01(stream);
+pub fn mul(stream: &mut TokenStream) -> Node {
+    let mut node = primary(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
             Reserved(op) if op == &Operator::Mul => {
                 stream.sequence.pop_front();
-                node = Mul(Box::new(node), Box::new(primary01(stream)))
+                node = Mul(Box::new(node), Box::new(primary(stream)))
             }
             Reserved(op) if op == &Operator::Div => {
                 stream.sequence.pop_front();
-                node = Div(Box::new(node), Box::new(primary01(stream)))
+                node = Div(Box::new(node), Box::new(primary(stream)))
             }
             Eof => {
                 break;
@@ -60,11 +60,11 @@ pub fn mul01(stream: &mut TokenStream) -> Node {
     node
 }
 
-pub fn primary01(stream: &mut TokenStream) -> Node {
+pub fn primary(stream: &mut TokenStream) -> Node {
     if let Some(token) = stream.sequence.pop_front() {
         match token {
             LeftBra => {
-                let node = expr01(stream);
+                let node = expr(stream);
                 if let Some(token) = stream.sequence.pop_front() {
                     if token == RightBra {
                         node
@@ -267,7 +267,7 @@ mod tests_parser {
             .zip(answers.into_iter())
         {
             let mut stream = TokenStream::tokenize01(case).unwrap();
-            let ast = expr01(&mut stream);
+            let ast = expr(&mut stream);
             assert_eq!(ast, answer);
         }
     }
