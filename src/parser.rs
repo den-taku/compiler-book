@@ -10,25 +10,84 @@ pub enum Node {
     Sub(Box<Node>, Box<Node>),
     Mul(Box<Node>, Box<Node>),
     Div(Box<Node>, Box<Node>),
+    Eq(Box<Node>, Box<Node>),
+    Ne(Box<Node>, Box<Node>),
+    Le(Box<Node>, Box<Node>),
+    Lt(Box<Node>, Box<Node>),
     Num(i64),
 }
 
-pub fn parser01(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
+pub fn parser(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
     verify_stream(stream)?;
-    Ok(expr01(stream))
+    Ok(expr(stream))
 }
 
-pub fn expr01(stream: &mut TokenStream) -> Node {
-    let mut node = mul01(stream);
+pub fn expr(stream: &mut TokenStream) -> Node {
+    equality(stream)
+}
+
+fn equality(stream: &mut TokenStream) -> Node {
+    let mut node = relational(stream);
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(eq) if eq == &Operator::Eq => {
+                stream.sequence.pop_front();
+                node = Eq(Box::new(node), Box::new(relational(stream)));
+            }
+            Reserved(ne) if ne == &Operator::Ne => {
+                stream.sequence.pop_front();
+                node = Ne(Box::new(node), Box::new(relational(stream)));
+            }
+            Eof => {
+                break;
+            }
+            _ => return node,
+        }
+    }
+    node
+}
+
+fn relational(stream: &mut TokenStream) -> Node {
+    let mut node = add(stream);
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(le) if le == &Operator::Le => {
+                stream.sequence.pop_front();
+                node = Le(Box::new(node), Box::new(add(stream)));
+            }
+            Reserved(lt) if lt == &Operator::Lt => {
+                stream.sequence.pop_front();
+                node = Lt(Box::new(node), Box::new(add(stream)));
+            }
+            Reserved(ge) if ge == &Operator::Ge => {
+                stream.sequence.pop_front();
+                node = Le(Box::new(add(stream)), Box::new(node));
+            }
+            Reserved(gt) if gt == &Operator::Gt => {
+                stream.sequence.pop_front();
+                node = Lt(Box::new(add(stream)), Box::new(node));
+            }
+            Eof => {
+                break;
+            }
+            _ => return node,
+        }
+    }
+    node
+}
+
+pub fn add(stream: &mut TokenStream) -> Node {
+    // println!("e: {:?}", stream.sequence);
+    let mut node = mul(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
             Reserved(op) if op == &Operator::Add => {
                 stream.sequence.pop_front();
-                node = Add(Box::new(node), Box::new(mul01(stream)))
+                node = Add(Box::new(node), Box::new(mul(stream)))
             }
             Reserved(op) if op == &Operator::Sub => {
                 stream.sequence.pop_front();
-                node = Sub(Box::new(node), Box::new(mul01(stream)))
+                node = Sub(Box::new(node), Box::new(mul(stream)))
             }
             Eof => {
                 break;
@@ -39,17 +98,18 @@ pub fn expr01(stream: &mut TokenStream) -> Node {
     node
 }
 
-pub fn mul01(stream: &mut TokenStream) -> Node {
-    let mut node = primary01(stream);
+fn mul(stream: &mut TokenStream) -> Node {
+    // println!("m: {:?}", stream.sequence);
+    let mut node = unary(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
             Reserved(op) if op == &Operator::Mul => {
                 stream.sequence.pop_front();
-                node = Mul(Box::new(node), Box::new(primary01(stream)))
+                node = Mul(Box::new(node), Box::new(unary(stream)))
             }
             Reserved(op) if op == &Operator::Div => {
                 stream.sequence.pop_front();
-                node = Div(Box::new(node), Box::new(primary01(stream)))
+                node = Div(Box::new(node), Box::new(unary(stream)))
             }
             Eof => {
                 break;
@@ -60,11 +120,31 @@ pub fn mul01(stream: &mut TokenStream) -> Node {
     node
 }
 
-pub fn primary01(stream: &mut TokenStream) -> Node {
+fn unary(stream: &mut TokenStream) -> Node {
+    // println!("u: {:?}", stream.sequence);
+    if let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(op) if op == &Operator::Add => {
+                stream.sequence.pop_front();
+                primary(stream)
+            }
+            Reserved(op) if op == &Operator::Sub => {
+                stream.sequence.pop_front();
+                Sub(Box::new(Num(0)), Box::new(primary(stream)))
+            }
+            _ => primary(stream),
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn primary(stream: &mut TokenStream) -> Node {
+    // println!("p: {:?}", stream.sequence);
     if let Some(token) = stream.sequence.pop_front() {
         match token {
             LeftBra => {
-                let node = expr01(stream);
+                let node = expr(stream);
                 if let Some(token) = stream.sequence.pop_front() {
                     if token == RightBra {
                         node
@@ -86,8 +166,19 @@ pub fn primary01(stream: &mut TokenStream) -> Node {
 fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
     let mut bracket = vec![];
     let mut need_number = true;
+    let mut count_unary = 0;
     for (index, &token) in stream.into_iter().enumerate() {
         match token {
+            Reserved(op) if op == Operator::Add || op == Operator::Sub => {
+                need_number = true;
+                if count_unary >= 1 {
+                    return Err((
+                        "fail to parse: use unary only once.".to_string(),
+                        Position(index),
+                    ));
+                }
+                count_unary += 1;
+            }
             Reserved(_) => {
                 if need_number {
                     return Err((
@@ -96,6 +187,7 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                     ));
                 }
                 need_number = true;
+                count_unary = 0;
             }
             Number(_) => {
                 if !need_number {
@@ -105,9 +197,11 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                     ));
                 }
                 need_number = false;
+                count_unary = 0;
             }
             LeftBra => {
                 bracket.push(index);
+                count_unary = 0;
             }
             RightBra => {
                 if bracket.pop().is_none() {
@@ -116,6 +210,7 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                         Position(index),
                     ));
                 }
+                count_unary = 0;
             }
             _ => {
                 if need_number {
@@ -232,6 +327,8 @@ mod tests_parser {
             "1 + 2 * 3",
             "0",
             "(4 + 3) / 7 + 1 * (4 - 2)",
+            "-10+20",
+            "(+4 + 3) / 7 + +1 * (4 - 2)",
         ];
         let answers = vec![
             Sub(
@@ -260,6 +357,20 @@ mod tests_parser {
                     Box::new(Sub(Box::new(Num(4)), Box::new(Num(2)))),
                 )),
             ),
+            Add(
+                Box::new(Sub(Box::new(Num(0)), Box::new(Num(10)))),
+                Box::new(Num(20)),
+            ),
+            Add(
+                Box::new(Div(
+                    Box::new(Add(Box::new(Num(4)), Box::new(Num(3)))),
+                    Box::new(Num(7)),
+                )),
+                Box::new(Mul(
+                    Box::new(Num(1)),
+                    Box::new(Sub(Box::new(Num(4)), Box::new(Num(2)))),
+                )),
+            ),
         ];
         for (case, answer) in cases
             .into_iter()
@@ -267,7 +378,7 @@ mod tests_parser {
             .zip(answers.into_iter())
         {
             let mut stream = TokenStream::tokenize01(case).unwrap();
-            let ast = expr01(&mut stream);
+            let ast = expr(&mut stream);
             assert_eq!(ast, answer);
         }
     }
@@ -302,22 +413,29 @@ mod tests_parser {
         }
     }
 
-    #[test]
-    fn for_add_sub_space_panic_number() {
-        let cases = vec!["23 - 8+5-+ 3"];
-        let answers = vec![17];
-        for (case, _answer) in cases
-            .into_iter()
-            .map(|s| s.to_string())
-            .zip(answers.into_iter())
-        {
-            let stream = TokenStream::tokenize01(case).unwrap();
-            assert_eq!(
-                add_sub_space(&stream),
-                Err(("fail to parse: need number here.".to_string(), Position(6)))
-            );
-        }
-    }
+    // #[test]
+    // fn for_add_sub_space_panic_number() {
+    //     // this test was not for up-to-date
+    //     let cases = vec!["23 - 8+5-+ 3"];
+    //     let answers = vec![17];
+    //     for (case, _answer) in cases
+    //         .into_iter()
+    //         .map(|s| s.to_string())
+    //         .zip(answers.into_iter())
+    //     {
+    //         let stream = TokenStream::tokenize01(case).unwrap();
+    //         assert_eq!(
+    //             add_sub_space(&stream),
+    //             Ok(Sub(
+    //                 Box::new(Add(
+    //                     Box::new(Sub(Box::new(Num(23)), Box::new(Num(8)))),
+    //                     Box::new(Num(5))
+    //                 )),
+    //                 Box::new(Num(3))
+    //             ))
+    //         );
+    //     }
+    // }
 
     #[test]
     fn for_add_sub_space_panic_operator() {
