@@ -31,7 +31,7 @@ fn main() {
         panic!()
     }
 
-    let program = generate_program01(&ast.unwrap());
+    let program = generate_program02(&ast.unwrap());
 
     println!("{}", program);
 }

@@ -10,6 +10,10 @@ pub enum Node {
     Sub(Box<Node>, Box<Node>),
     Mul(Box<Node>, Box<Node>),
     Div(Box<Node>, Box<Node>),
+    Eq(Box<Node>, Box<Node>),
+    Ne(Box<Node>, Box<Node>),
+    Le(Box<Node>, Box<Node>),
+    Lt(Box<Node>, Box<Node>),
     Num(i64),
 }
 
@@ -19,6 +23,60 @@ pub fn parser(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
 }
 
 pub fn expr(stream: &mut TokenStream) -> Node {
+    equality(stream)
+}
+
+fn equality(stream: &mut TokenStream) -> Node {
+    let mut node = relational(stream);
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(eq) if eq == &Operator::Eq => {
+                stream.sequence.pop_front();
+                node = Eq(Box::new(node), Box::new(relational(stream)));
+            }
+            Reserved(ne) if ne == &Operator::Ne => {
+                stream.sequence.pop_front();
+                node = Ne(Box::new(node), Box::new(relational(stream)));
+            }
+            Eof => {
+                break;
+            }
+            _ => return node,
+        }
+    }
+    node
+}
+
+fn relational(stream: &mut TokenStream) -> Node {
+    let mut node = add(stream);
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(le) if le == &Operator::Le => {
+                stream.sequence.pop_front();
+                node = Le(Box::new(node), Box::new(add(stream)));
+            }
+            Reserved(lt) if lt == &Operator::Lt => {
+                stream.sequence.pop_front();
+                node = Lt(Box::new(node), Box::new(add(stream)));
+            }
+            Reserved(ge) if ge == &Operator::Ge => {
+                stream.sequence.pop_front();
+                node = Le(Box::new(add(stream)), Box::new(node));
+            }
+            Reserved(gt) if gt == &Operator::Gt => {
+                stream.sequence.pop_front();
+                node = Lt(Box::new(add(stream)), Box::new(node));
+            }
+            Eof => {
+                break;
+            }
+            _ => return node,
+        }
+    }
+    node
+}
+
+pub fn add(stream: &mut TokenStream) -> Node {
     // println!("e: {:?}", stream.sequence);
     let mut node = mul(stream);
     while let Some(token) = stream.sequence.front() {
