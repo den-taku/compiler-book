@@ -19,6 +19,7 @@ pub fn parser(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
 }
 
 pub fn expr(stream: &mut TokenStream) -> Node {
+    // println!("e: {:?}", stream.sequence);
     let mut node = mul(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
@@ -39,17 +40,18 @@ pub fn expr(stream: &mut TokenStream) -> Node {
     node
 }
 
-pub fn mul(stream: &mut TokenStream) -> Node {
-    let mut node = primary(stream);
+fn mul(stream: &mut TokenStream) -> Node {
+    // println!("m: {:?}", stream.sequence);
+    let mut node = unary(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
             Reserved(op) if op == &Operator::Mul => {
                 stream.sequence.pop_front();
-                node = Mul(Box::new(node), Box::new(primary(stream)))
+                node = Mul(Box::new(node), Box::new(unary(stream)))
             }
             Reserved(op) if op == &Operator::Div => {
                 stream.sequence.pop_front();
-                node = Div(Box::new(node), Box::new(primary(stream)))
+                node = Div(Box::new(node), Box::new(unary(stream)))
             }
             Eof => {
                 break;
@@ -60,7 +62,27 @@ pub fn mul(stream: &mut TokenStream) -> Node {
     node
 }
 
-pub fn primary(stream: &mut TokenStream) -> Node {
+fn unary(stream: &mut TokenStream) -> Node {
+    // println!("u: {:?}", stream.sequence);
+    if let Some(token) = stream.sequence.front() {
+        match token {
+            Reserved(op) if op == &Operator::Add => {
+                stream.sequence.pop_front();
+                primary(stream)
+            }
+            Reserved(op) if op == &Operator::Sub => {
+                stream.sequence.pop_front();
+                Sub(Box::new(Num(0)), Box::new(primary(stream)))
+            }
+            _ => primary(stream),
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn primary(stream: &mut TokenStream) -> Node {
+    // println!("p: {:?}", stream.sequence);
     if let Some(token) = stream.sequence.pop_front() {
         match token {
             LeftBra => {
@@ -86,8 +108,19 @@ pub fn primary(stream: &mut TokenStream) -> Node {
 fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
     let mut bracket = vec![];
     let mut need_number = true;
+    let mut count_unary = 0;
     for (index, &token) in stream.into_iter().enumerate() {
         match token {
+            Reserved(op) if op == Operator::Add || op == Operator::Sub => {
+                need_number = true;
+                if count_unary >= 1 {
+                    return Err((
+                        "fail to parse: use unary only once.".to_string(),
+                        Position(index),
+                    ));
+                }
+                count_unary += 1;
+            }
             Reserved(_) => {
                 if need_number {
                     return Err((
@@ -96,6 +129,7 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                     ));
                 }
                 need_number = true;
+                count_unary = 0;
             }
             Number(_) => {
                 if !need_number {
@@ -105,9 +139,11 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                     ));
                 }
                 need_number = false;
+                count_unary = 0;
             }
             LeftBra => {
                 bracket.push(index);
+                count_unary = 0;
             }
             RightBra => {
                 if bracket.pop().is_none() {
@@ -116,6 +152,7 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                         Position(index),
                     ));
                 }
+                count_unary = 0;
             }
             _ => {
                 if need_number {
@@ -232,6 +269,8 @@ mod tests_parser {
             "1 + 2 * 3",
             "0",
             "(4 + 3) / 7 + 1 * (4 - 2)",
+            "-10+20",
+            "(+4 + 3) / 7 + +1 * (4 - 2)",
         ];
         let answers = vec![
             Sub(
@@ -250,6 +289,20 @@ mod tests_parser {
                 Box::new(Mul(Box::new(Num(2)), Box::new(Num(3)))),
             ),
             Num(0),
+            Add(
+                Box::new(Div(
+                    Box::new(Add(Box::new(Num(4)), Box::new(Num(3)))),
+                    Box::new(Num(7)),
+                )),
+                Box::new(Mul(
+                    Box::new(Num(1)),
+                    Box::new(Sub(Box::new(Num(4)), Box::new(Num(2)))),
+                )),
+            ),
+            Add(
+                Box::new(Sub(Box::new(Num(0)), Box::new(Num(10)))),
+                Box::new(Num(20)),
+            ),
             Add(
                 Box::new(Div(
                     Box::new(Add(Box::new(Num(4)), Box::new(Num(3)))),
@@ -302,22 +355,29 @@ mod tests_parser {
         }
     }
 
-    #[test]
-    fn for_add_sub_space_panic_number() {
-        let cases = vec!["23 - 8+5-+ 3"];
-        let answers = vec![17];
-        for (case, _answer) in cases
-            .into_iter()
-            .map(|s| s.to_string())
-            .zip(answers.into_iter())
-        {
-            let stream = TokenStream::tokenize01(case).unwrap();
-            assert_eq!(
-                add_sub_space(&stream),
-                Err(("fail to parse: need number here.".to_string(), Position(6)))
-            );
-        }
-    }
+    // #[test]
+    // fn for_add_sub_space_panic_number() {
+    //     // this test was not for up-to-date
+    //     let cases = vec!["23 - 8+5-+ 3"];
+    //     let answers = vec![17];
+    //     for (case, _answer) in cases
+    //         .into_iter()
+    //         .map(|s| s.to_string())
+    //         .zip(answers.into_iter())
+    //     {
+    //         let stream = TokenStream::tokenize01(case).unwrap();
+    //         assert_eq!(
+    //             add_sub_space(&stream),
+    //             Ok(Sub(
+    //                 Box::new(Add(
+    //                     Box::new(Sub(Box::new(Num(23)), Box::new(Num(8)))),
+    //                     Box::new(Num(5))
+    //                 )),
+    //                 Box::new(Num(3))
+    //             ))
+    //         );
+    //     }
+    // }
 
     #[test]
     fn for_add_sub_space_panic_operator() {
