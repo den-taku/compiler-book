@@ -24,6 +24,12 @@ pub enum Operator {
     Sub,
     Mul,
     Div,
+    Eq,
+    Ne,
+    Le,
+    Lt,
+    Ge,
+    Gt,
 }
 
 impl<'a> IntoIterator for &'a TokenStream {
@@ -53,6 +59,16 @@ impl TokenStream {
 
             // lex as number
             let (string, ret, width) = TokenStream::consume_number(program);
+            program = string;
+            if let Some(token) = ret {
+                sequence.push_back(token);
+                position.push_back(start_at);
+                start_at += width;
+                continue;
+            }
+
+            // lex as orderd operator
+            let (string, ret, width) = TokenStream::consume_order(program);
             program = string;
             if let Some(token) = ret {
                 sequence.push_back(token);
@@ -119,6 +135,39 @@ impl TokenStream {
         )
     }
 
+    fn consume_order(buffer: String) -> (String, Option<Token>, usize) {
+        let mut chars = buffer.chars();
+        match chars.by_ref().peekable().peek() {
+            Some(or) if or == &'<' => match chars.by_ref().peekable().peek() {
+                Some(eq) if eq == &'=' => (chars.collect::<String>(), Some(Reserved(Le)), 2),
+                _ => (
+                    buffer.chars().skip(1).collect::<String>(),
+                    Some(Reserved(Lt)),
+                    1,
+                ),
+            },
+            Some(or) if or == &'>' => match chars.by_ref().peekable().peek() {
+                Some(eq) if eq == &'=' => (chars.collect::<String>(), Some(Reserved(Ge)), 2),
+                _ => (
+                    buffer.chars().skip(1).collect::<String>(),
+                    Some(Reserved(Gt)),
+                    1,
+                ),
+            },
+            Some(or) if or == &'=' => match chars.by_ref().peekable().peek() {
+                Some(eq) if eq == &'=' => (chars.collect::<String>(), Some(Reserved(Eq)), 2),
+                // fail to parse
+                _ => (buffer, None, 0),
+            },
+            Some(or) if or == &'!' => match chars.by_ref().peekable().peek() {
+                Some(eq) if eq == &'=' => (chars.collect::<String>(), Some(Reserved(Ne)), 2),
+                // fail to parse
+                _ => (buffer, None, 0),
+            },
+            _ => (buffer, None, 0),
+        }
+    }
+
     fn consume_operator(buffer: String) -> (String, Option<Token>, usize) {
         let mut chars = buffer.chars();
         match chars.by_ref().peekable().peek() {
@@ -146,7 +195,13 @@ mod tests_lexer {
 
     #[test]
     fn for_tokenize() {
-        let cases = vec!["5+20-4", "23 - 8+ 5-   3 + 56 + 9 - 8", "0"];
+        let cases = vec![
+            "5+20-4",
+            "23 - 8+ 5-   3 + 56 + 9 - 8",
+            "0",
+            "4 * 5 < 3 - 2",
+            "-3==5",
+        ];
         let answers = vec![
             (
                 vec![
@@ -179,6 +234,23 @@ mod tests_lexer {
                 vec![0, 3, 5, 6, 8, 9, 13, 15, 17, 20, 22, 24, 26],
             ),
             (vec![Number(0), Eof], vec![0]),
+            (
+                vec![
+                    Number(4),
+                    Reserved(Mul),
+                    Number(5),
+                    Reserved(Lt),
+                    Number(3),
+                    Reserved(Sub),
+                    Number(2),
+                    Eof,
+                ],
+                vec![0, 2, 4, 6, 8, 10, 12],
+            ),
+            (
+                vec![Reserved(Sub), Number(3), Reserved(Eq), Number(5), Eof],
+                vec![0, 1, 2, 4],
+            ),
         ];
         for (case, answer) in cases
             .into_iter()
