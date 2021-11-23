@@ -1,7 +1,7 @@
 use crate::error::*;
 use std::iter::IntoIterator;
-use Operator::*;
 use Token::*;
+use Word::*;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TokenStream {
@@ -11,16 +11,17 @@ pub struct TokenStream {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Token {
-    Reserved(Operator),
+    Reserved(Word),
     Ident(u64),
     Number(i64),
-    LeftBra,
-    RightBra,
+    SemiColon,
     Eof,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Operator {
+pub enum Word {
+    LeftBra,
+    RightBra,
     Add,
     Sub,
     Mul,
@@ -31,6 +32,7 @@ pub enum Operator {
     Lt,
     Ge,
     Gt,
+    Assign,
 }
 
 impl<'a> IntoIterator for &'a TokenStream {
@@ -48,6 +50,16 @@ impl TokenStream {
         let mut position = std::collections::LinkedList::<usize>::new();
         let mut start_at = 0usize;
         while !program.is_empty() {
+            // lex semicolon
+            let (string, ret, width) = TokenStream::consume_semicolon(program);
+            program = string;
+            if let Some(token) = ret {
+                sequence.push_back(token);
+                position.push_back(start_at);
+                start_at += width;
+                continue;
+            }
+
             // lex brackets
             let (string, ret, width) = TokenStream::consume_bracket(program);
             program = string;
@@ -122,9 +134,25 @@ impl TokenStream {
     fn consume_bracket(buffer: String) -> (String, Option<Token>, usize) {
         let mut chars = buffer.chars();
         match chars.by_ref().peekable().peek() {
-            Some(op) if op == &'(' => ({ chars.collect::<String>() }, Some(LeftBra), 1),
-            Some(op) if op == &')' => ({ chars.collect::<String>() }, Some(RightBra), 1),
+            Some(op) if op == &'(' => ({ chars.collect::<String>() }, Some(Reserved(LeftBra)), 1),
+            Some(op) if op == &')' => ({ chars.collect::<String>() }, Some(Reserved(RightBra)), 1),
             _ => (buffer, None, 0),
+        }
+    }
+
+    fn consume_semicolon(buffer: String) -> (String, Option<Token>, usize) {
+        if let Some(c) = buffer.chars().next() {
+            if c == ';' {
+                (
+                    buffer.chars().skip(1).collect::<String>(),
+                    Some(SemiColon),
+                    1,
+                )
+            } else {
+                (buffer, None, 0)
+            }
+        } else {
+            (buffer, None, 0)
         }
     }
 
@@ -181,7 +209,11 @@ impl TokenStream {
             Some(or) if or == &'=' => match chars.by_ref().peekable().peek() {
                 Some(eq) if eq == &'=' => (chars.collect::<String>(), Some(Reserved(Eq)), 2),
                 // fail to parse
-                _ => (buffer, None, 0),
+                _ => (
+                    buffer.chars().skip(1).collect::<String>(),
+                    Some(Reserved(Eq)),
+                    1,
+                ),
             },
             Some(or) if or == &'!' => match chars.by_ref().peekable().peek() {
                 Some(eq) if eq == &'=' => (chars.collect::<String>(), Some(Reserved(Ne)), 2),

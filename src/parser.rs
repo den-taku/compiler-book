@@ -14,27 +14,66 @@ pub enum Node {
     Ne(Box<Node>, Box<Node>),
     Le(Box<Node>, Box<Node>),
     Lt(Box<Node>, Box<Node>),
+    Assign(Box<Node>, Box<Node>),
+    LVar(usize),
     Num(i64),
 }
 
-pub fn parser(stream: &mut TokenStream) -> Result<Node, (String, Position)> {
+pub fn parser(stream: &mut TokenStream) -> Result<Vec<Node>, (String, Position)> {
     verify_stream(stream)?;
-    Ok(expr(stream))
+
+    let mut nodes = Vec::new();
+    program(stream, &mut nodes);
+    Ok(nodes)
+}
+
+fn program(stream: &mut TokenStream, nodes: &mut Vec<Node>) {
+    while let Some(token) = stream.sequence.front() {
+        match token {
+            Eof => {
+                break;
+            }
+            _ => nodes.push(stmt(stream)),
+        }
+    }
+}
+
+fn stmt(stream: &mut TokenStream) -> Node {
+    let node = expr(stream);
+    match stream.sequence.front() {
+        Some(SemiColon) => {
+            stream.sequence.pop_front();
+            node
+        }
+        _ => unreachable!(),
+    }
 }
 
 pub fn expr(stream: &mut TokenStream) -> Node {
-    equality(stream)
+    assign(stream)
+}
+
+fn assign(stream: &mut TokenStream) -> Node {
+    let mut node = equality(stream);
+    match stream.sequence.front() {
+        Some(Reserved(Word::Assign)) => {
+            stream.sequence.pop_front();
+            node = Assign(Box::new(node), Box::new(assign(stream)))
+        }
+        _ => {}
+    }
+    node
 }
 
 fn equality(stream: &mut TokenStream) -> Node {
     let mut node = relational(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
-            Reserved(eq) if eq == &Operator::Eq => {
+            Reserved(eq) if eq == &Word::Eq => {
                 stream.sequence.pop_front();
                 node = Eq(Box::new(node), Box::new(relational(stream)));
             }
-            Reserved(ne) if ne == &Operator::Ne => {
+            Reserved(ne) if ne == &Word::Ne => {
                 stream.sequence.pop_front();
                 node = Ne(Box::new(node), Box::new(relational(stream)));
             }
@@ -51,19 +90,19 @@ fn relational(stream: &mut TokenStream) -> Node {
     let mut node = add(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
-            Reserved(le) if le == &Operator::Le => {
+            Reserved(le) if le == &Word::Le => {
                 stream.sequence.pop_front();
                 node = Le(Box::new(node), Box::new(add(stream)));
             }
-            Reserved(lt) if lt == &Operator::Lt => {
+            Reserved(lt) if lt == &Word::Lt => {
                 stream.sequence.pop_front();
                 node = Lt(Box::new(node), Box::new(add(stream)));
             }
-            Reserved(ge) if ge == &Operator::Ge => {
+            Reserved(ge) if ge == &Word::Ge => {
                 stream.sequence.pop_front();
                 node = Le(Box::new(add(stream)), Box::new(node));
             }
-            Reserved(gt) if gt == &Operator::Gt => {
+            Reserved(gt) if gt == &Word::Gt => {
                 stream.sequence.pop_front();
                 node = Lt(Box::new(add(stream)), Box::new(node));
             }
@@ -81,11 +120,11 @@ pub fn add(stream: &mut TokenStream) -> Node {
     let mut node = mul(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
-            Reserved(op) if op == &Operator::Add => {
+            Reserved(op) if op == &Word::Add => {
                 stream.sequence.pop_front();
                 node = Add(Box::new(node), Box::new(mul(stream)))
             }
-            Reserved(op) if op == &Operator::Sub => {
+            Reserved(op) if op == &Word::Sub => {
                 stream.sequence.pop_front();
                 node = Sub(Box::new(node), Box::new(mul(stream)))
             }
@@ -103,11 +142,11 @@ fn mul(stream: &mut TokenStream) -> Node {
     let mut node = unary(stream);
     while let Some(token) = stream.sequence.front() {
         match token {
-            Reserved(op) if op == &Operator::Mul => {
+            Reserved(op) if op == &Word::Mul => {
                 stream.sequence.pop_front();
                 node = Mul(Box::new(node), Box::new(unary(stream)))
             }
-            Reserved(op) if op == &Operator::Div => {
+            Reserved(op) if op == &Word::Div => {
                 stream.sequence.pop_front();
                 node = Div(Box::new(node), Box::new(unary(stream)))
             }
@@ -124,11 +163,11 @@ fn unary(stream: &mut TokenStream) -> Node {
     // println!("u: {:?}", stream.sequence);
     if let Some(token) = stream.sequence.front() {
         match token {
-            Reserved(op) if op == &Operator::Add => {
+            Reserved(op) if op == &Word::Add => {
                 stream.sequence.pop_front();
                 primary(stream)
             }
-            Reserved(op) if op == &Operator::Sub => {
+            Reserved(op) if op == &Word::Sub => {
                 stream.sequence.pop_front();
                 Sub(Box::new(Num(0)), Box::new(primary(stream)))
             }
@@ -143,10 +182,10 @@ fn primary(stream: &mut TokenStream) -> Node {
     // println!("p: {:?}", stream.sequence);
     if let Some(token) = stream.sequence.pop_front() {
         match token {
-            LeftBra => {
+            Reserved(Word::LeftBra) => {
                 let node = expr(stream);
                 if let Some(token) = stream.sequence.pop_front() {
-                    if token == RightBra {
+                    if token == Reserved(Word::RightBra) {
                         node
                     } else {
                         unreachable!()
@@ -156,6 +195,7 @@ fn primary(stream: &mut TokenStream) -> Node {
                 }
             }
             Number(number) => Num(number),
+            Ident(id) => LVar((id + 1) as usize * 8),
             _ => unreachable!(),
         }
     } else {
@@ -169,7 +209,7 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
     let mut count_unary = 0;
     for (index, &token) in stream.into_iter().enumerate() {
         match token {
-            Reserved(op) if op == Operator::Add || op == Operator::Sub => {
+            Reserved(op) if op == Word::Add || op == Word::Sub => {
                 need_number = true;
                 if count_unary >= 1 {
                     return Err((
@@ -178,6 +218,19 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                     ));
                 }
                 count_unary += 1;
+            }
+            Reserved(Word::LeftBra) => {
+                bracket.push(index);
+                count_unary = 0;
+            }
+            Reserved(Word::RightBra) => {
+                if bracket.pop().is_none() {
+                    return Err((
+                        "fail to parse: this bracker doesn't match.".to_string(),
+                        Position(index),
+                    ));
+                }
+                count_unary = 0;
             }
             Reserved(_) => {
                 if need_number {
@@ -199,19 +252,7 @@ fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
                 need_number = false;
                 count_unary = 0;
             }
-            LeftBra => {
-                bracket.push(index);
-                count_unary = 0;
-            }
-            RightBra => {
-                if bracket.pop().is_none() {
-                    return Err((
-                        "fail to parse: this bracker doesn't match.".to_string(),
-                        Position(index),
-                    ));
-                }
-                count_unary = 0;
-            }
+
             _ => {
                 if need_number {
                     return Err((
@@ -250,7 +291,7 @@ pub fn add_sub_space(stream: &TokenStream) -> Result<String, (String, Position)>
 
     for &token in stream {
         match token {
-            Reserved(operator) if operator == Operator::Add => ret.push_str("  add rax, "),
+            Reserved(operator) if operator == Word::Add => ret.push_str("  add rax, "),
             Reserved(_) => ret.push_str("  sub rax, "),
             Number(number) => ret.push_str(&format!("{}\n", number)),
             Eof => {
