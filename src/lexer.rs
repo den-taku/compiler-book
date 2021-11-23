@@ -12,6 +12,7 @@ pub struct TokenStream {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Token {
     Reserved(Operator),
+    Ident(u64),
     Number(i64),
     LeftBra,
     RightBra,
@@ -77,6 +78,16 @@ impl TokenStream {
                 continue;
             }
 
+            // lex as alphabet
+            let (string, ret, width) = TokenStream::consume_alphabetic(program);
+            program = string;
+            if let Some(token) = ret {
+                sequence.push_back(token);
+                position.push_back(start_at);
+                start_at += width;
+                continue;
+            }
+
             // lex as operator
             let (string, ret, width) = TokenStream::consume_operator(program);
             program = string;
@@ -115,6 +126,19 @@ impl TokenStream {
             Some(op) if op == &')' => ({ chars.collect::<String>() }, Some(RightBra), 1),
             _ => (buffer, None, 0),
         }
+    }
+
+    fn consume_alphabetic(buffer: String) -> (String, Option<Token>, usize) {
+        let alphabets = buffer.chars().take_while(|c| c.is_alphabetic()).count();
+        (
+            buffer.chars().skip(alphabets).collect::<String>(),
+            if alphabets == 0 {
+                None
+            } else {
+                Some(Ident((buffer.chars().next().unwrap() as u8 - b'a') as u64))
+            },
+            alphabets,
+        )
     }
 
     fn consume_number(buffer: String) -> (String, Option<Token>, usize) {
@@ -279,10 +303,10 @@ mod tests_lexer {
 
     #[test]
     fn for_tokenize_panic_invalid() {
-        let program = "12 + 2 - a + 89".to_string();
+        let program = "12 + 2 - ☀︎ + 89".to_string();
         assert_eq!(
             TokenStream::tokenize01(program),
-            Err(("fail to lex. left: a + 89.".to_string(), Byte(9)))
+            Err(("fail to lex. left: ☀︎ + 89.".to_string(), Byte(9)))
         );
     }
 }
