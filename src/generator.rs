@@ -51,42 +51,30 @@ pub fn generate_arithmetics_compare(node: &Node, buffer: &mut String) {
                     buffer.push_str("   cqo\n");
                     buffer.push_str("   idiv rdi\n")
                 }
-                Eq(_, _) => {
+                Eq(_, _) | Ne(_, _) | Le(_, _) | Lt(_, _) => {
                     buffer.push_str("   cmp rax, rdi\n");
-                    buffer.push_str("   sete al\n");
+                    match node {
+                        Eq(_, _) => {
+                            buffer.push_str("   sete al\n");
+                        }
+                        Ne(_, _) => {
+                            buffer.push_str("   setne al\n");
+                        }
+                        Le(_, _) => {
+                            buffer.push_str("   setle al\n");
+                        }
+                        Lt(_, _) => {
+                            buffer.push_str("   setl al\n");
+                        }
+                        _ => unreachable!(),
+                    }
                     if cfg!(target_os = "linux") {
                         buffer.push_str("   movzb rax, al\n");
                     } else {
                         buffer.push_str("   movzx rax, al\n");
                     }
                 }
-                Ne(_, _) => {
-                    buffer.push_str("   cmp rax, rdi\n");
-                    buffer.push_str("   setne al\n");
-                    if cfg!(target_os = "linux") {
-                        buffer.push_str("   movzb rax, al\n");
-                    } else {
-                        buffer.push_str("   movzx rax, al\n");
-                    }
-                }
-                Le(_, _) => {
-                    buffer.push_str("   cmp rax, rdi\n");
-                    buffer.push_str("   setle al\n");
-                    if cfg!(target_os = "linux") {
-                        buffer.push_str("   movzb rax, al\n");
-                    } else {
-                        buffer.push_str("   movzx rax, al\n");
-                    }
-                }
-                Lt(_, _) => {
-                    buffer.push_str("   cmp rax, rdi\n");
-                    buffer.push_str("   setl al\n");
-                    if cfg!(target_os = "linux") {
-                        buffer.push_str("   movzb rax, al\n");
-                    } else {
-                        buffer.push_str("   movzx rax, al\n");
-                    }
-                }
+
                 Num(_) => unreachable!(),
             }
 
