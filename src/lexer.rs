@@ -212,7 +212,7 @@ impl TokenStream {
                 // fail to parse
                 _ => (
                     buffer.chars().skip(1).collect::<String>(),
-                    Some(Reserved(Eq)),
+                    Some(Reserved(Assign)),
                     1,
                 ),
             },
