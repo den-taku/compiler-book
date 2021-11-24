@@ -16,7 +16,7 @@ fn main() {
         process::exit(1);
     }
 
-    let token_stream = TokenStream::tokenize01(args[1].clone());
+    let token_stream = TokenStream::tokenize(args[1].clone());
     match token_stream {
         Ok(_) => {}
         Err((message, byte)) => {

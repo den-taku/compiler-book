@@ -45,7 +45,7 @@ impl<'a> IntoIterator for &'a TokenStream {
 }
 
 impl TokenStream {
-    pub fn tokenize01(mut program: String) -> Result<Self, (String, Byte)> {
+    pub fn tokenize(mut program: String) -> Result<Self, (String, Byte)> {
         let mut sequence = std::collections::LinkedList::<Token>::new();
         let mut position = std::collections::LinkedList::<usize>::new();
         let mut start_at = 0usize;
@@ -316,7 +316,7 @@ mod tests_lexer {
                 position: tokens.1.into_iter().collect(),
             }))
         {
-            assert_eq!(TokenStream::tokenize01(case), Ok(answer));
+            assert_eq!(TokenStream::tokenize(case), Ok(answer));
         }
         assert_eq!(1 + 2, 3);
     }
@@ -325,7 +325,7 @@ mod tests_lexer {
     fn for_tokenize_panic_empty() {
         let program = " \n   ".to_string();
         assert_eq!(
-            TokenStream::tokenize01(program),
+            TokenStream::tokenize(program),
             Err((
                 "fail to lex. need some charactors without whitespace.".to_string(),
                 Byte(5)
@@ -337,7 +337,7 @@ mod tests_lexer {
     fn for_tokenize_panic_invalid() {
         let program = "12 + 2 - ☀︎ + 89".to_string();
         assert_eq!(
-            TokenStream::tokenize01(program),
+            TokenStream::tokenize(program),
             Err(("fail to lex. left: ☀︎ + 89.".to_string(), Byte(9)))
         );
     }

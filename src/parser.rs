@@ -344,7 +344,7 @@ mod tests_parser {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let mut stream = TokenStream::tokenize01(case).unwrap();
+            let mut stream = TokenStream::tokenize(case).unwrap();
             let ast = expr(&mut stream);
             assert_eq!(ast, answer);
         }
@@ -359,7 +359,7 @@ mod tests_parser {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let stream = TokenStream::tokenize01(case).unwrap();
+            let stream = TokenStream::tokenize(case).unwrap();
             let program = add_sub_space(&stream).unwrap();
             let mut file = File::create("test03.s").unwrap();
             write!(file, "{}", program).unwrap();

@@ -86,7 +86,7 @@ mod tests_static_check {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let stream = TokenStream::tokenize01(case).unwrap();
+            let stream = TokenStream::tokenize(case).unwrap();
             assert_eq!(
                 verify_stream(&stream),
                 Err((
