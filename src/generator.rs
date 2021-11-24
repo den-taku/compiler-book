@@ -1,5 +1,49 @@
 use crate::parser::{Node, Node::*};
 
+pub fn generate_program03(nodes: &[Node]) -> String {
+    let mut buffer = String::new();
+
+    buffer.push_str(".intel_syntax noprefix\n");
+    if cfg!(target_os = "linux") {
+        buffer.push_str(".global main\n\n");
+        buffer.push_str("main:\n");
+    } else {
+        buffer.push_str(".global _main\n\n");
+        buffer.push_str("_main:\n");
+    }
+
+    // reserve stack for local value
+    buffer.push_str("   push rbp\n");
+    buffer.push_str("   mov rbp, rsp\n");
+    buffer.push_str("   sub rsp, 208\n");
+
+    for node in nodes {
+        generator(node, &mut buffer);
+        buffer.push_str("   pop rax\n");
+    }
+
+    buffer.push_str("   mov rsp, rbp\n");
+    buffer.push_str("   pop rbp\n");
+    buffer.push_str("   ret\n");
+
+    buffer
+}
+
+pub fn generator(node: &Node, buffer: &mut String) {
+    unimplemented!()
+}
+
+pub fn generate_lvalue(node: &Node, buffer: &mut String) {
+    match node {
+        LVar(offset) => {
+            buffer.push_str("   mov rax, rbp\n");
+            buffer.push_str(&format!("   sub rax, {}\n", offset));
+            buffer.push_str("   push rax\n");
+        }
+        _ => unreachable!(),
+    }
+}
+
 pub fn generate_program02(node: &Node) -> String {
     let mut buffer = String::new();
 
@@ -76,10 +120,12 @@ pub fn generate_arithmetics_compare(node: &Node, buffer: &mut String) {
                 }
 
                 Num(_) => unreachable!(),
+                _ => unreachable!(),
             }
 
             buffer.push_str("   push rax\n")
         }
+        _ => unreachable!(),
     }
 }
 

@@ -7,6 +7,7 @@ use compiler_book::error::*;
 use compiler_book::generator::*;
 use compiler_book::lexer::*;
 use compiler_book::parser::*;
+use compiler_book::static_check::*;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -24,6 +25,11 @@ fn main() {
         }
     }
 
+    if let Err((message, position)) = verify_stream(&token_stream.clone().unwrap()) {
+        error_position(position, &token_stream.unwrap(), args[1].clone(), message);
+        panic!()
+    }
+
     let ast = parser(&mut token_stream.clone().unwrap());
 
     if let Err((message, position)) = ast {
@@ -31,7 +37,7 @@ fn main() {
         panic!()
     }
 
-    let program = generate_program02(&ast.unwrap());
+    let program = generate_program03(&ast.unwrap());
 
     println!("{}", program);
 }

@@ -20,8 +20,6 @@ pub enum Node {
 }
 
 pub fn parser(stream: &mut TokenStream) -> Result<Vec<Node>, (String, Position)> {
-    verify_stream(stream)?;
-
     let mut nodes = Vec::new();
     program(stream, &mut nodes);
     Ok(nodes)
@@ -203,80 +201,8 @@ fn primary(stream: &mut TokenStream) -> Node {
     }
 }
 
-fn verify_stream(stream: &TokenStream) -> Result<(), (String, Position)> {
-    let mut bracket = vec![];
-    let mut need_number = true;
-    let mut count_unary = 0;
-    for (index, &token) in stream.into_iter().enumerate() {
-        match token {
-            Reserved(op) if op == Word::Add || op == Word::Sub => {
-                need_number = true;
-                if count_unary >= 1 {
-                    return Err((
-                        "fail to parse: use unary only once.".to_string(),
-                        Position(index),
-                    ));
-                }
-                count_unary += 1;
-            }
-            Reserved(Word::LeftBra) => {
-                bracket.push(index);
-                count_unary = 0;
-            }
-            Reserved(Word::RightBra) => {
-                if bracket.pop().is_none() {
-                    return Err((
-                        "fail to parse: this bracker doesn't match.".to_string(),
-                        Position(index),
-                    ));
-                }
-                count_unary = 0;
-            }
-            Reserved(_) => {
-                if need_number {
-                    return Err((
-                        "fail to parse: need number here.".to_string(),
-                        Position(index),
-                    ));
-                }
-                need_number = true;
-                count_unary = 0;
-            }
-            Number(_) => {
-                if !need_number {
-                    return Err((
-                        "fail to parse: need operator here.".to_string(),
-                        Position(index),
-                    ));
-                }
-                need_number = false;
-                count_unary = 0;
-            }
-
-            _ => {
-                if need_number {
-                    return Err((
-                        "fail to parse: need number here.".to_string(),
-                        Position(index),
-                    ));
-                }
-                break;
-            }
-        }
-    }
-    if let Some(index) = bracket.pop() {
-        Err((
-            "fail to parse: this bracket doesn't match.".to_string(),
-            Position(index),
-        ))
-    } else {
-        Ok(())
-    }
-}
-
 pub fn add_sub_space(stream: &TokenStream) -> Result<String, (String, Position)> {
     // verify token sequence
-    verify_stream(stream)?;
 
     let mut ret = String::new();
     ret.push_str(".intel_syntax noprefix\n");
@@ -451,50 +377,6 @@ mod tests_parser {
                 .arg("rm test03.s; rm test03")
                 .output()
                 .unwrap();
-        }
-    }
-
-    // #[test]
-    // fn for_add_sub_space_panic_number() {
-    //     // this test was not for up-to-date
-    //     let cases = vec!["23 - 8+5-+ 3"];
-    //     let answers = vec![17];
-    //     for (case, _answer) in cases
-    //         .into_iter()
-    //         .map(|s| s.to_string())
-    //         .zip(answers.into_iter())
-    //     {
-    //         let stream = TokenStream::tokenize01(case).unwrap();
-    //         assert_eq!(
-    //             add_sub_space(&stream),
-    //             Ok(Sub(
-    //                 Box::new(Add(
-    //                     Box::new(Sub(Box::new(Num(23)), Box::new(Num(8)))),
-    //                     Box::new(Num(5))
-    //                 )),
-    //                 Box::new(Num(3))
-    //             ))
-    //         );
-    //     }
-    // }
-
-    #[test]
-    fn for_add_sub_space_panic_operator() {
-        let cases = vec!["23 - 8+5 3"];
-        let answers = vec![17];
-        for (case, _answer) in cases
-            .into_iter()
-            .map(|s| s.to_string())
-            .zip(answers.into_iter())
-        {
-            let stream = TokenStream::tokenize01(case).unwrap();
-            assert_eq!(
-                add_sub_space(&stream),
-                Err((
-                    "fail to parse: need operator here.".to_string(),
-                    Position(5)
-                ))
-            );
         }
     }
 
