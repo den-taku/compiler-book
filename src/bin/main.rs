@@ -10,12 +10,14 @@ use compiler_book::parser::*;
 use compiler_book::static_check::*;
 
 fn main() {
+    // read program
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("invalid number of arguments.");
         process::exit(1);
     }
 
+    // tokenize program
     let token_stream = TokenStream::tokenize(args[1].clone());
     match token_stream {
         Ok(_) => {}
@@ -25,18 +27,20 @@ fn main() {
         }
     }
 
+    // enforce static check to tokinized stream
     if let Err((message, position)) = verify_stream(&token_stream.clone().unwrap()) {
         error_position(position, &token_stream.unwrap(), args[1].clone(), message);
         panic!()
     }
 
+    // parse stream
     let ast = parser(&mut token_stream.clone().unwrap());
-
     if let Err((message, position)) = ast {
         error_position(position, &token_stream.unwrap(), args[1].clone(), message);
         panic!()
     }
 
+    // generate assembly program
     let program = generate_program03(&ast.unwrap());
 
     println!("{}", program);

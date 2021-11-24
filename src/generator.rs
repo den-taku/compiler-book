@@ -30,6 +30,81 @@ pub fn generate_program03(nodes: &[Node]) -> String {
 }
 
 pub fn generator(node: &Node, buffer: &mut String) {
+    match node {
+        Num(number) => {
+            buffer.push_str(&format!("   push {}\n", number));
+        }
+        LVar(_) => {
+            generate_lvalue(node, buffer);
+            buffer.push_str("   pop rax\n");
+            buffer.push_str("   mov rax, [rax]\n");
+            buffer.push_str("   push rax\n");
+        }
+        Assign(left, right) => {
+            generate_lvalue(left, buffer);
+            generator(right, buffer);
+            buffer.push_str("   pop rdi\n");
+            buffer.push_str("   pop rax\n");
+            buffer.push_str("   mov [rax], rdi\n");
+            buffer.push_str("   push rdi\n");
+        }
+        Add(left, right)
+        | Sub(left, right)
+        | Mul(left, right)
+        | Div(left, right)
+        | Eq(left, right)
+        | Ne(left, right)
+        | Le(left, right)
+        | Lt(left, right) => {
+            // first push left value
+            generate_arithmetics_compare(left, buffer);
+            // next push right value on the left value
+            generate_arithmetics_compare(right, buffer);
+
+            // right value -> rdi
+            buffer.push_str("   pop rdi\n");
+            // left value -> rax
+            buffer.push_str("   pop rax\n");
+
+            match node {
+                Add(_, _) => buffer.push_str("   add rax, rdi\n"),
+                Sub(_, _) => buffer.push_str("   sub rax, rdi\n"),
+                Mul(_, _) => buffer.push_str("   imul rax, rdi\n"),
+                Div(_, _) => {
+                    buffer.push_str("   cqo\n");
+                    buffer.push_str("   idiv rdi\n")
+                }
+                Eq(_, _) | Ne(_, _) | Le(_, _) | Lt(_, _) => {
+                    buffer.push_str("   cmp rax, rdi\n");
+                    match node {
+                        Eq(_, _) => {
+                            buffer.push_str("   sete al\n");
+                        }
+                        Ne(_, _) => {
+                            buffer.push_str("   setne al\n");
+                        }
+                        Le(_, _) => {
+                            buffer.push_str("   setle al\n");
+                        }
+                        Lt(_, _) => {
+                            buffer.push_str("   setl al\n");
+                        }
+                        _ => unreachable!(),
+                    }
+                    if cfg!(target_os = "linux") {
+                        buffer.push_str("   movzb rax, al\n");
+                    } else {
+                        buffer.push_str("   movzx rax, al\n");
+                    }
+                }
+
+                Num(_) => unreachable!(),
+                _ => unreachable!(),
+            }
+
+            buffer.push_str("   push rax\n")
+        }
+    }
     unimplemented!()
 }
 
@@ -38,6 +113,7 @@ pub fn generate_lvalue(node: &Node, buffer: &mut String) {
         LVar(offset) => {
             buffer.push_str("   mov rax, rbp\n");
             buffer.push_str(&format!("   sub rax, {}\n", offset));
+            // push lvalue's address to stack
             buffer.push_str("   push rax\n");
         }
         _ => unreachable!(),
