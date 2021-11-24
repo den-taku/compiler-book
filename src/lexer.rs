@@ -128,6 +128,7 @@ impl TokenStream {
             ));
         }
         sequence.push_back(Eof);
+        position.push_back(start_at);
         Ok(Self { sequence, position })
     }
 
@@ -268,7 +269,7 @@ mod tests_lexer {
                     Number(4),
                     Eof,
                 ],
-                vec![0, 1, 2, 4, 5],
+                vec![0, 1, 2, 4, 5, 6],
             ),
             (
                 vec![
@@ -287,9 +288,9 @@ mod tests_lexer {
                     Number(8),
                     Eof,
                 ],
-                vec![0, 3, 5, 6, 8, 9, 13, 15, 17, 20, 22, 24, 26],
+                vec![0, 3, 5, 6, 8, 9, 13, 15, 17, 20, 22, 24, 26, 27],
             ),
-            (vec![Number(0), Eof], vec![0]),
+            (vec![Number(0), Eof], vec![0, 1]),
             (
                 vec![
                     Number(4),
@@ -301,11 +302,11 @@ mod tests_lexer {
                     Number(2),
                     Eof,
                 ],
-                vec![0, 2, 4, 6, 8, 10, 12],
+                vec![0, 2, 4, 6, 8, 10, 12, 13],
             ),
             (
                 vec![Reserved(Sub), Number(3), Reserved(Eq), Number(5), Eof],
-                vec![0, 1, 2, 4],
+                vec![0, 1, 2, 4, 5],
             ),
         ];
         for (case, answer) in cases

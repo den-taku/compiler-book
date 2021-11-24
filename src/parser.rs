@@ -53,12 +53,9 @@ pub fn expr(stream: &mut TokenStream) -> Node {
 
 fn assign(stream: &mut TokenStream) -> Node {
     let mut node = equality(stream);
-    match stream.sequence.front() {
-        Some(Reserved(Word::Assign)) => {
-            stream.sequence.pop_front();
-            node = Assign(Box::new(node), Box::new(assign(stream)))
-        }
-        _ => {}
+    if let Some(Reserved(Word::Assign)) = stream.sequence.front() {
+        stream.sequence.pop_front();
+        node = Assign(Box::new(node), Box::new(assign(stream)))
     }
     node
 }

@@ -57,9 +57,9 @@ pub fn generator(node: &Node, buffer: &mut String) {
         | Le(left, right)
         | Lt(left, right) => {
             // first push left value
-            generate_arithmetics_compare(left, buffer);
+            generator(left, buffer);
             // next push right value on the left value
-            generate_arithmetics_compare(right, buffer);
+            generator(right, buffer);
 
             // right value -> rdi
             buffer.push_str("   pop rdi\n");
@@ -105,7 +105,6 @@ pub fn generator(node: &Node, buffer: &mut String) {
             buffer.push_str("   push rax\n")
         }
     }
-    unimplemented!()
 }
 
 pub fn generate_lvalue(node: &Node, buffer: &mut String) {
@@ -116,7 +115,10 @@ pub fn generate_lvalue(node: &Node, buffer: &mut String) {
             // push lvalue's address to stack
             buffer.push_str("   push rax\n");
         }
-        _ => unreachable!(),
+        _ => {
+            eprintln!("Left value is needed to be variant.");
+            panic!();
+        }
     }
 }
 
@@ -264,9 +266,70 @@ mod tests_generator {
     use super::*;
     use crate::lexer::TokenStream;
     use crate::parser::*;
+    use crate::static_check::*;
     use std::fs::File;
     use std::io::Write;
     use std::process::Command;
+
+    #[test]
+    fn for_generate_program03() {
+        let cases = vec![
+            "5+20-4;",
+            "23 - 8+5- 3  ;",
+            "1 + 2 * 3;",
+            "0;",
+            "(4 + 3) / 7 + 1 * (4 - 2);",
+            "((4    +3) /  7 +4) *(4 -2 +   3 );",
+            "(4 + 3) / 7 + 1 * (4 - 2);-3*+5+20;",
+            "0==1;",
+            "35==35;",
+            "0!=1;",
+            "0 != 0    ;",
+            "0 < 1;",
+            "1 < 1 ;",
+            "5 <= 123;",
+            "5 <= 5; ",
+            "(4 + 3) / 7 + 1 * (4 - 2); (4 + 3) / 7 + 1 * (4 - 2);\n5 > 5; ",
+            "5 >= 5 ;",
+            "127 >= 0;",
+            "0 >= 1;",
+            "0 == 0 == 0;\n",
+            " 7 > 0 > 0;",
+            "0 < 0 < 7;",
+            "((((4 + 3) / 7 + 4) * (4 - 2) == 10) > 0) * 120\n;",
+            "(((4 + 3) / 7 + 4) * (4 - 2) == 10 > 0) * 120;",
+        ];
+        let answers = vec![
+            21, 17, 7, 0, 3, 25, 5, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 120, 0,
+        ];
+        for (case, answer) in cases
+            .into_iter()
+            .map(|s| s.to_string())
+            .zip(answers.into_iter())
+        {
+            println!("{}", case);
+            let mut stream = TokenStream::tokenize(case).unwrap();
+            verify_stream(&stream).unwrap();
+            let ast = parser(&mut stream).unwrap();
+            let program = generate_program03(&ast);
+            let mut file = File::create("test06.s").unwrap();
+            write!(file, "{}", program).unwrap();
+            file.flush().unwrap();
+            let out = Command::new("sh")
+                .arg("-c")
+                .arg(&format!("cc -o test06 test06.s; ./test06; echo $?",))
+                .output()
+                .unwrap()
+                .stdout;
+            let statement = std::str::from_utf8(&out).unwrap();
+            assert_eq!(statement.trim().parse::<i64>().unwrap(), answer);
+            Command::new("sh")
+                .arg("-c")
+                .arg("rm test06.s; rm test06")
+                .output()
+                .unwrap();
+        }
+    }
 
     #[test]
     fn for_generate_program02() {
