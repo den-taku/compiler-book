@@ -1,5 +1,127 @@
 use crate::parser::{Node, Node::*};
 
+pub fn generate_program03(nodes: &[Node]) -> String {
+    let mut buffer = String::new();
+
+    buffer.push_str(".intel_syntax noprefix\n");
+    if cfg!(target_os = "linux") {
+        buffer.push_str(".global main\n\n");
+        buffer.push_str("main:\n");
+    } else {
+        buffer.push_str(".global _main\n\n");
+        buffer.push_str("_main:\n");
+    }
+
+    // reserve stack for local value
+    buffer.push_str("   push rbp\n");
+    buffer.push_str("   mov rbp, rsp\n");
+    buffer.push_str("   sub rsp, 208\n");
+
+    for node in nodes {
+        generator(node, &mut buffer);
+        buffer.push_str("   pop rax\n");
+    }
+
+    buffer.push_str("   mov rsp, rbp\n");
+    buffer.push_str("   pop rbp\n");
+    buffer.push_str("   ret\n");
+
+    buffer
+}
+
+pub fn generator(node: &Node, buffer: &mut String) {
+    match node {
+        Num(number) => {
+            buffer.push_str(&format!("   push {}\n", number));
+        }
+        LVar(_) => {
+            generate_lvalue(node, buffer);
+            buffer.push_str("   pop rax\n");
+            buffer.push_str("   mov rax, [rax]\n");
+            buffer.push_str("   push rax\n");
+        }
+        Assign(left, right) => {
+            generate_lvalue(left, buffer);
+            generator(right, buffer);
+            buffer.push_str("   pop rdi\n");
+            buffer.push_str("   pop rax\n");
+            buffer.push_str("   mov [rax], rdi\n");
+            buffer.push_str("   push rdi\n");
+        }
+        Add(left, right)
+        | Sub(left, right)
+        | Mul(left, right)
+        | Div(left, right)
+        | Eq(left, right)
+        | Ne(left, right)
+        | Le(left, right)
+        | Lt(left, right) => {
+            // first push left value
+            generator(left, buffer);
+            // next push right value on the left value
+            generator(right, buffer);
+
+            // right value -> rdi
+            buffer.push_str("   pop rdi\n");
+            // left value -> rax
+            buffer.push_str("   pop rax\n");
+
+            match node {
+                Add(_, _) => buffer.push_str("   add rax, rdi\n"),
+                Sub(_, _) => buffer.push_str("   sub rax, rdi\n"),
+                Mul(_, _) => buffer.push_str("   imul rax, rdi\n"),
+                Div(_, _) => {
+                    buffer.push_str("   cqo\n");
+                    buffer.push_str("   idiv rdi\n")
+                }
+                Eq(_, _) | Ne(_, _) | Le(_, _) | Lt(_, _) => {
+                    buffer.push_str("   cmp rax, rdi\n");
+                    match node {
+                        Eq(_, _) => {
+                            buffer.push_str("   sete al\n");
+                        }
+                        Ne(_, _) => {
+                            buffer.push_str("   setne al\n");
+                        }
+                        Le(_, _) => {
+                            buffer.push_str("   setle al\n");
+                        }
+                        Lt(_, _) => {
+                            buffer.push_str("   setl al\n");
+                        }
+                        _ => unreachable!(),
+                    }
+                    if cfg!(target_os = "linux") {
+                        buffer.push_str("   movzb rax, al\n");
+                    } else {
+                        buffer.push_str("   movzx rax, al\n");
+                    }
+                }
+
+                Num(_) => unreachable!(),
+                _ => unreachable!(),
+            }
+
+            buffer.push_str("   push rax\n")
+        }
+    }
+}
+
+pub fn generate_lvalue(node: &Node, buffer: &mut String) {
+    match node {
+        LVar(offset) => {
+            buffer.push_str("   mov rax, rbp\n");
+            buffer.push_str(&format!("   sub rax, {}\n", offset));
+            // push lvalue's address to stack
+            buffer.push_str("   push rax\n");
+        }
+        _ => {
+            eprintln!("Left value is needed to be variant.");
+            panic!();
+        }
+    }
+}
+
 pub fn generate_program02(node: &Node) -> String {
     let mut buffer = String::new();
 
@@ -76,10 +198,12 @@ pub fn generate_arithmetics_compare(node: &Node, buffer: &mut String) {
                 }
 
                 Num(_) => unreachable!(),
+                _ => unreachable!(),
             }
 
             buffer.push_str("   push rax\n")
         }
+        _ => unreachable!(),
     }
 }
 
@@ -142,9 +266,70 @@ mod tests_generator {
     use super::*;
     use crate::lexer::TokenStream;
     use crate::parser::*;
+    use crate::static_check::*;
     use std::fs::File;
     use std::io::Write;
     use std::process::Command;
+
+    #[test]
+    fn for_generate_program03() {
+        let cases = vec![
+            "5+20-4;",
+            "23 - 8+5- 3  ;",
+            "1 + 2 * 3;",
+            "0;",
+            "(4 + 3) / 7 + 1 * (4 - 2);",
+            "((4    +3) /  7 +4) *(4 -2 +   3 );",
+            "(4 + 3) / 7 + 1 * (4 - 2);-3*+5+20;",
+            "0==1;",
+            "35==35;",
+            "0!=1;",
+            "0 != 0    ;",
+            "0 < 1;",
+            "1 < 1 ;",
+            "5 <= 123;",
+            "5 <= 5; ",
+            "(4 + 3) / 7 + 1 * (4 - 2); (4 + 3) / 7 + 1 * (4 - 2);\n5 > 5; ",
+            "5 >= 5 ;",
+            "127 >= 0;",
+            "0 >= 1;",
+            "0 == 0 == 0;\n",
+            " 7 > 0 > 0;",
+            "0 < 0 < 7;",
+            "((((4 + 3) / 7 + 4) * (4 - 2) == 10) > 0) * 120\n;",
+            "(((4 + 3) / 7 + 4) * (4 - 2) == 10 > 0) * 120;",
+        ];
+        let answers = vec![
+            21, 17, 7, 0, 3, 25, 5, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 120, 0,
+        ];
+        for (case, answer) in cases
+            .into_iter()
+            .map(|s| s.to_string())
+            .zip(answers.into_iter())
+        {
+            println!("{}", case);
+            let mut stream = TokenStream::tokenize(case).unwrap();
+            verify_stream(&stream).unwrap();
+            let ast = parser(&mut stream).unwrap();
+            let program = generate_program03(&ast);
+            let mut file = File::create("test06.s").unwrap();
+            write!(file, "{}", program).unwrap();
+            file.flush().unwrap();
+            let out = Command::new("sh")
+                .arg("-c")
+                .arg(&format!("cc -o test06 test06.s; ./test06; echo $?",))
+                .output()
+                .unwrap()
+                .stdout;
+            let statement = std::str::from_utf8(&out).unwrap();
+            assert_eq!(statement.trim().parse::<i64>().unwrap(), answer);
+            Command::new("sh")
+                .arg("-c")
+                .arg("rm test06.s; rm test06")
+                .output()
+                .unwrap();
+        }
+    }
 
     #[test]
     fn for_generate_program02() {
@@ -182,7 +367,7 @@ mod tests_generator {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let mut stream = TokenStream::tokenize01(case).unwrap();
+            let mut stream = TokenStream::tokenize(case).unwrap();
             let ast = expr(&mut stream);
             let program = generate_program02(&ast);
             let mut file = File::create("test05.s").unwrap();
@@ -221,7 +406,7 @@ mod tests_generator {
             .map(|s| s.to_string())
             .zip(answers.into_iter())
         {
-            let mut stream = TokenStream::tokenize01(case).unwrap();
+            let mut stream = TokenStream::tokenize(case).unwrap();
             let ast = expr(&mut stream);
             let program = generate_program01(&ast);
             let mut file = File::create("test04.s").unwrap();
@@ -325,7 +510,7 @@ mod tests_generator {
             .map(|s| s.to_string())
             .zip(answers.into_iter().map(|s| s.to_string()))
         {
-            let mut stream = TokenStream::tokenize01(case).unwrap();
+            let mut stream = TokenStream::tokenize(case).unwrap();
             let ast = expr(&mut stream);
             let mut buffer = String::new();
             generate_arithmetics(&ast, &mut buffer);
