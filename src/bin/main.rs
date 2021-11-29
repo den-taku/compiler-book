@@ -9,6 +9,7 @@ use compiler_book::lexer::*;
 use compiler_book::parser::*;
 use compiler_book::static_check::*;
 
+// read compiler book until step10: local variable
 fn main() {
     // read program
     let args: Vec<String> = env::args().collect();
